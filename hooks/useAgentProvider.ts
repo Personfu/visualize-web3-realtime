@@ -2,13 +2,13 @@
 
 import { useMemo } from 'react';
 import type {
-  AgentIdentity,
-  AgentFlowTrace,
-  ExecutorState,
-  DataProviderStats,
-  DataProviderEvent,
-  TopToken,
-  TraderEdge,
+AgentIdentity,
+AgentFlowTrace,
+ExecutorState,
+DataProviderStats,
+DataProviderEvent,
+TopToken,
+TraderEdge,
 } from '@web3viz/core';
 import type { AgentAggregateStats } from './useAgentEvents';
 import { useAgentEvents } from './useAgentEvents';
@@ -47,16 +47,9 @@ interface UseAgentProviderReturn {
 // Helpers: map agent data → DataProvider concepts
 // ---------------------------------------------------------------------------
 
-function agentColor(index: number): string {
-  const palette = [
-    '#c084fc', '#60a5fa', '#f472b6', '#34d399',
-    '#fbbf24', '#fb923c', '#a78bfa', '#22d3ee',
-  ];
-  return palette[index % palette.length];
-}
 
 function agentsToTopTokens(agents: Map<string, AgentIdentity>, flows: Map<string, AgentFlowTrace>): TopToken[] {
-  return Array.from(agents.values()).map((agent, idx) => {
+  return Array.from(agents.values()).map((agent) => {
     const flow = flows.get(agent.agentId);
     const toolCalls = flow?.totalToolCalls ?? 0;
     const tasksCompleted = flow?.totalTasksCompleted ?? 0;
@@ -149,7 +142,6 @@ function agentEventsToProviderEvents(
 
     return {
       id: evt.eventId,
-      source: 'agents',
       providerId: 'agents',
       category,
       chain: 'agents',
@@ -195,11 +187,11 @@ export function useAgentProvider(options: UseAgentProviderOptions = {}): UseAgen
     [data.recentEvents, data.agents, enabled],
   );
 
-  const stats = useMemo<DataProviderStats>(() => {
+  const stats = useMemo<DataProviderStats>((): DataProviderStats => {
     if (!enabled) {
       return {
         counts: {},
-        totalVolumeSol: 0,
+        totalVolume: {},
         totalTransactions: 0,
         totalAgents: 0,
         recentEvents: [],
@@ -219,7 +211,7 @@ export function useAgentProvider(options: UseAgentProviderOptions = {}): UseAgen
 
     return {
       counts,
-      totalVolumeSol: data.stats.totalTasksCompleted,
+      totalVolume: { agents: data.stats.totalTasksCompleted },
       totalTransactions: data.stats.totalToolCalls,
       totalAgents: data.stats.totalAgents,
       recentEvents: providerEvents,

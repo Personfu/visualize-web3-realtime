@@ -1,11 +1,11 @@
 import type {
-  DataProvider,
-  DataProviderEvent,
-  DataProviderStats,
-  ConnectionState,
-  CategoryConfig,
-  SourceConfig,
-  RawEvent,
+DataProvider,
+DataProviderEvent,
+DataProviderStats,
+ConnectionState,
+CategoryConfig,
+SourceConfig,
+RawEvent,
 } from '@web3viz/core';
 import { getCategoriesForSource } from '@web3viz/core';
 
@@ -94,11 +94,13 @@ export class MockProvider implements DataProvider {
     let topTokens = Array.from(this.tokenAcc.entries())
       .map(([addr, token]) => ({
         tokenAddress: addr,
+        mint: addr,
         name: token.name,
         symbol: token.symbol,
         chain: 'mock',
         trades: token.trades,
         volume: token.volume,
+        volumeSol: token.volume,
         nativeSymbol: 'SOL',
       }))
       .sort((a, b) => b.volume - a.volume)
@@ -109,11 +111,13 @@ export class MockProvider implements DataProvider {
       topTokens = [
         {
           tokenAddress: 'mock1aaa',
+          mint: 'mock1aaa',
           name: 'MockDog',
           symbol: 'MDOG',
           chain: 'mock',
           trades: 0,
           volume: 0,
+          volumeSol: 0,
           nativeSymbol: 'SOL',
         },
       ];
@@ -130,7 +134,11 @@ export class MockProvider implements DataProvider {
       totalVolume: { mock: this.totalVolume },
       recentEvents: [],
       topTokens,
-      traderEdges: this.traderEdges.slice(0, 5000),
+      traderEdges: this.traderEdges.slice(0, 5000).map((edge) => ({
+        ...edge,
+        mint: edge.tokenAddress,
+        volumeSol: edge.volume,
+      })),
       rawEvents: [],
     };
   }
@@ -261,7 +269,6 @@ export class MockProvider implements DataProvider {
         },
       });
     } else {
-      const token = randomEl(MOCK_TOKENS);
       const solAmount = Math.random() * 5;
       const wallet = randomEl(MOCK_WALLETS);
       this.totalClaims++;

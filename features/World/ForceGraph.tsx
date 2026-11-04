@@ -1,25 +1,26 @@
 'use client';
 
-import React, { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { ContactShadows, Environment, MapControls } from '@react-three/drei';
+import React,{ forwardRef,memo,useEffect,useImperativeHandle,useMemo,useRef,useState } from 'react';
+import { Canvas,useFrame,useThree } from '@react-three/fiber';
+import { ContactShadows,Environment,MapControls } from '@react-three/drei';
 import type { MapControls as MapControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 import {
-  forceSimulation,
-  forceLink,
-  forceManyBody,
-  forceCenter,
-  forceCollide,
-  type SimulationNodeDatum,
-  type SimulationLinkDatum,
+forceSimulation,
+forceLink,
+forceManyBody,
+forceCenter,
+forceCollide,
+type SimulationNodeDatum,
+type SimulationLinkDatum,
 } from 'd3-force';
 
-import type { TopToken, TraderEdge } from '@web3viz/core';
+import type { TopToken,TraderEdge } from '@web3viz/core';
+import { useWebGLSupport } from '@/hooks/useWebGLSupport';
 import type { ShareColors } from './SharePanel';
 
 import { ProtocolLabel } from './ProtocolLabel';
-import { CHAIN_COLORS, COLOR_PALETTE, PROTOCOL_COLORS } from './constants';
+import { CHAIN_COLORS,COLOR_PALETTE,PROTOCOL_COLORS } from './constants';
 import YouAreHereMarker from './YouAreHereMarker';
 import { PostProcessing } from '@web3viz/react-graph';
 
@@ -48,6 +49,7 @@ interface ForceEdge extends SimulationLinkDatum<ForceNode> {
 // Constants
 // ---------------------------------------------------------------------------
 
+const AGENT_COLOR_PALETTE = ['#c084fc', '#60a5fa', '#f472b6', '#34d399', '#fbbf24', '#fb923c', '#a78bfa', '#22d3ee'];
 const MAX_AGENT_NODES = 5000;
 const HUB_BASE_RADIUS = 0.8;
 const HUB_MAX_RADIUS = 3.0;
@@ -93,7 +95,8 @@ class ForceGraphSimulation {
           }),
       )
       .alphaDecay(0.01)
-      .velocityDecay(0.4);
+      .velocityDecay(0.4)
+      .stop();
   }
 
   update(topTokens: TopToken[], traderEdges: TraderEdge[]) {
@@ -248,11 +251,11 @@ function HubNodeMesh({
   const targetColor = useRef(new THREE.Color(PROTOCOL_COLORS.default));
   const targetOpacity = useRef(1);
   const targetRingOpacity = useRef(0);
-  const radiusRef = useRef(HUB_BASE_RADIUS);
+  const labelRef = useRef<THREE.Group>(null);
 
   const node = useMemo(() => sim.nodeMap.get(nodeId), [sim, nodeId]);
   const isAgentHub = node?.source === 'agents';
-  const AGENT_COLOR_PALETTE = ['#c084fc', '#60a5fa', '#f472b6', '#34d399', '#fbbf24', '#fb923c', '#a78bfa', '#22d3ee'];
+
 
   useEffect(() => {
     if (isHighlighted) {
@@ -296,7 +299,7 @@ function HubNodeMesh({
     } else {
       meshRef.current.scale.setScalar(baseScale);
     }
-    radiusRef.current = nodeData.radius;
+    if (labelRef.current) labelRef.current.position.y = nodeData.radius + 1;
 
     const lerpFactor = 1 - Math.exp(-10 * delta);
     materialRef.current.color.lerp(targetColor.current, lerpFactor);
@@ -358,11 +361,13 @@ function HubNodeMesh({
         </mesh>
       )}
       {isHovered && (
-        <ProtocolLabel
-          name={`🤖 ${sim.nodeMap.get(nodeId)?.label ?? 'UNKNOWN'}`}
-          position={[0, radiusRef.current + 1, 0]}
-          visible
-        />
+        <group ref={labelRef} position={[0, HUB_BASE_RADIUS + 1, 0]}>
+          <ProtocolLabel
+            name={`🤖 ${sim.nodeMap.get(nodeId)?.label ?? 'UNKNOWN'}`}
+            position={[0, 0, 0]}
+            visible
+          />
+        </group>
       )}
     </group>
   );
@@ -376,7 +381,7 @@ const AgentNodes = memo<{
   /** Address of the specifically searched agent — gets its own highlighted treatment */
   highlightedAddress?: string | null;
   colorOverride?: string;
-}>(({ sim, activeProtocol, highlightedHubId, highlightedAddress, colorOverride }) => {
+}>(({ sim, activeProtocol, highlightedHubId, highlightedAddress }) => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const tempObj = useMemo(() => new THREE.Object3D(), []);
   const tempColor = useMemo(() => new THREE.Color(), []);
@@ -578,11 +583,7 @@ Edges.displayName = 'Edges';
 
 /** Scene background color controller */
 const SceneBackground = memo<{ color: string }>(({ color }) => {
-  const { scene } = useThree();
-  useEffect(() => {
-    scene.background = new THREE.Color(color);
-  }, [color, scene]);
-  return null;
+  return <color attach="background" args={[color]} />;
 });
 SceneBackground.displayName = 'SceneBackground';
 
@@ -688,7 +689,7 @@ const IdleAmbientScene = memo(() => {
 
   return (
     <>
-      <Environment preset="studio" environmentIntensity={0.4} background={false} />
+      <Environment files="/environments/studio_small_03_1k.hdr" environmentIntensity={0.4} background={false} />
       <directionalLight position={[20, 40, 20]} intensity={0.3} />
       <instancedMesh ref={meshRef} args={[geometry, material, IDLE_NODE_COUNT]} frustumCulled={false} />
       <Ground />
@@ -774,7 +775,7 @@ const NetworkScene = memo<{
     <>
       {shareColors && <SceneBackground color={shareColors.background} />}
 
-      <Environment preset="studio" environmentIntensity={0.4} background={false} />
+      <Environment files="/environments/studio_small_03_1k.hdr" environmentIntensity={0.4} background={false} />
       <directionalLight position={[20, 40, 20]} intensity={0.3} />
 
       <Edges
@@ -983,15 +984,11 @@ const ForceGraphInner = forwardRef<ForceGraphHandle, ForceGraphProps>(function F
   { topTokens, traderEdges, activeProtocol = null, highlightedHubIndex = null, highlightedAddress = null, onSelectProtocol, onDismissHighlight, height = '100%', shareColors, idle = false },
   ref,
 ) {
-  const simRef = useRef<ForceGraphSimulation | null>(null);
+  const [sim] = useState(() => new ForceGraphSimulation());
   const containerRef = useRef<HTMLDivElement>(null);
   const cameraApiRef = useRef<CameraApi | null>(null);
   const snapshotRef = useRef<(() => string | null) | null>(null);
 
-  if (!simRef.current) {
-    simRef.current = new ForceGraphSimulation();
-  }
-  const sim = simRef.current;
 
   useImperativeHandle(ref, () => ({
     getCanvasElement: () => containerRef.current?.querySelector('canvas') ?? null,
@@ -1062,29 +1059,13 @@ const ForceGraphInner = forwardRef<ForceGraphHandle, ForceGraphProps>(function F
     },
   }));
 
-  const tokenKey = topTokens.map((t) => `${t.tokenAddress}:${t.trades}`).join(',');
-  const edgeCount = traderEdges.length;
   useEffect(() => {
     sim.update(topTokens, traderEdges);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tokenKey, edgeCount]);
+  }, [sim, topTokens, traderEdges]);
 
-  useEffect(() => {
-    return () => {
-      simRef.current?.dispose();
-    };
-  }, []);
+  useEffect(() => () => sim.dispose(), [sim]);
 
-  const [webglSupported, setWebglSupported] = useState(true);
-  useEffect(() => {
-    try {
-      const c = document.createElement('canvas');
-      const supported = !!(c.getContext('webgl2') || c.getContext('webgl'));
-      setWebglSupported(supported);
-    } catch {
-      setWebglSupported(false);
-    }
-  }, []);
+  const webglSupported = useWebGLSupport();
 
   if (!webglSupported) {
     return (

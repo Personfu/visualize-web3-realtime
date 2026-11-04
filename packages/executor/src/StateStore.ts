@@ -1,7 +1,10 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { prepareStatePath } from './statePath.js';
 import type { AgentIdentity, AgentTask, AgentEvent } from './types.js';
+
+type AgentRow = { id: string; name: string; role: string; address: string | null; parent_agent_id: string | null; created_at: number };
+type TaskRow = { id: string; agent_id: string; description: string; status: AgentTask['status']; priority: number; created_at: number; started_at: number | null; ended_at: number | null; result: string | null; error: string | null };
+type EventRow = { event_id: string; type: AgentEvent['type']; agent_id: string; task_id: string | null; timestamp: number; payload: string };
 
 /**
  * Persistent state store using SQLite.
@@ -11,11 +14,7 @@ export class StateStore {
   private db: Database.Database;
 
   constructor(dbPath: string) {
-    // Create directory if it doesn't exist
-    const dir = dirname(dbPath);
-    mkdirSync(dir, { recursive: true });
-
-    this.db = new Database(dbPath);
+    this.db = new Database(prepareStatePath(dbPath));
     this.db.pragma('journal_mode = WAL');
     this.initializeSchema();
   }
@@ -86,8 +85,8 @@ export class StateStore {
         agent.createdAt,
         Date.now(),
       );
-    } catch (err) {
-      console.error('[StateStore] Failed to save agent:', err);
+    } catch {
+      console.error('[StateStore] Failed to save agent:');
     }
   }
 
@@ -109,8 +108,8 @@ export class StateStore {
         task.result ?? null,
         task.error ?? null,
       );
-    } catch (err) {
-      console.error('[StateStore] Failed to save task:', err);
+    } catch {
+      console.error('[StateStore] Failed to save task:');
     }
   }
 
@@ -129,20 +128,20 @@ export class StateStore {
         event.timestamp,
         JSON.stringify(event.payload),
       );
-    } catch (err) {
-      console.error('[StateStore] Failed to save event:', err);
+    } catch {
+      console.error('[StateStore] Failed to save event:');
     }
   }
 
   loadActiveAgents(): AgentIdentity[] {
     try {
-      const stmt = this.db.prepare(`
+      const stmt = this.db.prepare<[], AgentRow>(`
         SELECT id, name, role, address, parent_agent_id, created_at
         FROM agents
         WHERE status != 'shutdown'
         ORDER BY created_at DESC
       `);
-      const rows = stmt.all() as any[];
+      const rows = stmt.all();
       return rows.map((row) => ({
         agentId: row.id,
         name: row.name,
@@ -151,21 +150,21 @@ export class StateStore {
         parentAgentId: row.parent_agent_id || undefined,
         createdAt: row.created_at,
       }));
-    } catch (err) {
-      console.error('[StateStore] Failed to load active agents:', err);
+    } catch {
+      console.error('[StateStore] Failed to load active agents:');
       return [];
     }
   }
 
   loadActiveTasks(): AgentTask[] {
     try {
-      const stmt = this.db.prepare(`
+      const stmt = this.db.prepare<[], TaskRow>(`
         SELECT id, agent_id, description, status, priority, created_at, started_at, ended_at, result, error
         FROM tasks
         WHERE status IN ('queued', 'in-progress')
         ORDER BY priority ASC, created_at ASC
       `);
-      const rows = stmt.all() as any[];
+      const rows = stmt.all();
       return rows.map((row) => ({
         taskId: row.id,
         agentId: row.agent_id,
@@ -178,48 +177,46 @@ export class StateStore {
         result: row.result || undefined,
         error: row.error || undefined,
       }));
-    } catch (err) {
-      console.error('[StateStore] Failed to load active tasks:', err);
+    } catch {
+      console.error('[StateStore] Failed to load active tasks:');
       return [];
     }
   }
 
   loadRecentEvents(limit: number = 100): AgentEvent[] {
     try {
-      const stmt = this.db.prepare(`
+      const stmt = this.db.prepare<[number], EventRow>(`
         SELECT event_id, type, agent_id, task_id, timestamp, payload
         FROM events
         ORDER BY timestamp DESC
         LIMIT ?
       `);
-      const rows = stmt.all(limit) as any[];
+      const rows = stmt.all(limit);
       return rows.reverse().map((row) => ({
         eventId: row.event_id,
         type: row.type,
         agentId: row.agent_id,
         taskId: row.task_id || undefined,
         timestamp: row.timestamp,
-        payload: JSON.parse(row.payload),
+        payload: JSON.parse(row.payload) as AgentEvent['payload'],
       }));
-    } catch (err) {
-      console.error('[StateStore] Failed to load recent events:', err);
+    } catch {
+      console.error('[StateStore] Failed to load recent events:');
       return [];
     }
   }
 
   getStats(): { totalTasks: number; totalEvents: number; uptime: number } {
     try {
-      const taskCount = (this.db.prepare('SELECT COUNT(*) as count FROM tasks').get() as any)
-        .count;
-      const eventCount = (this.db.prepare('SELECT COUNT(*) as count FROM events').get() as any)
-        .count;
+      const taskCount = this.db.prepare<[], { count: number }>('SELECT COUNT(*) as count FROM tasks').get()?.count ?? 0;
+      const eventCount = this.db.prepare<[], { count: number }>('SELECT COUNT(*) as count FROM events').get()?.count ?? 0;
 
       const startTime = this.getMeta('start_time');
       const uptime = startTime ? Date.now() - parseInt(startTime, 10) : 0;
 
       return { totalTasks: taskCount, totalEvents: eventCount, uptime };
-    } catch (err) {
-      console.error('[StateStore] Failed to get stats:', err);
+    } catch {
+      console.error('[StateStore] Failed to get stats:');
       return { totalTasks: 0, totalEvents: 0, uptime: 0 };
     }
   }
@@ -228,8 +225,8 @@ export class StateStore {
     try {
       const stmt = this.db.prepare('INSERT OR REPLACE INTO executor_meta (key, value) VALUES (?, ?)');
       stmt.run(key, value);
-    } catch (err) {
-      console.error('[StateStore] Failed to set meta:', err);
+    } catch {
+      console.error('[StateStore] Failed to set meta:');
     }
   }
 
@@ -238,8 +235,8 @@ export class StateStore {
       const stmt = this.db.prepare('SELECT value FROM executor_meta WHERE key = ?');
       const row = stmt.get(key) as { value: string } | undefined;
       return row ? row.value : null;
-    } catch (err) {
-      console.error('[StateStore] Failed to get meta:', err);
+    } catch {
+      console.error('[StateStore] Failed to get meta:');
       return null;
     }
   }
@@ -247,8 +244,8 @@ export class StateStore {
   close(): void {
     try {
       this.db.close();
-    } catch (err) {
-      console.error('[StateStore] Failed to close database:', err);
+    } catch {
+      console.error('[StateStore] Failed to close database:');
     }
   }
 }

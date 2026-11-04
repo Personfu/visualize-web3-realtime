@@ -1,4 +1,4 @@
-import type { AgentIdentity, AgentTask, AgentEvent } from './types.js';
+import type { AgentIdentity,AgentTask,AgentEvent } from './types.js';
 import type { AgentSpawnConfig } from './types.js';
 import { SperaxOSClient } from './SperaxOSClient.js';
 
@@ -9,7 +9,6 @@ const DEFAULT_AGENT_ROLES = ['coder', 'researcher', 'planner'];
 let _callId = 0;
 function uid(): string { return `call_${Date.now()}_${++_callId}`; }
 
-function randomFrom<T>(arr: T[]): T { return arr[Math.floor(Math.random() * arr.length)]; }
 
 interface AgentState {
   identity: AgentIdentity;

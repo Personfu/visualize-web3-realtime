@@ -1,9 +1,8 @@
 'use client';
 
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
-import type { AgentEvent, AgentIdentity } from '@web3viz/core';
+import { memo,useCallback,useEffect,useRef } from 'react';
+import type { AgentEvent,AgentIdentity } from '@web3viz/core';
 import { AGENT_COLOR_PALETTE } from './constants';
-import { agentThemeTokens } from '@/packages/ui/src/tokens/agent-colors';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -56,12 +55,10 @@ const AgentTimeline = memo<AgentTimelineProps>(({
   scrubOffset,
   onScrubChange,
   windowMs = WINDOW_MS,
-  colorScheme = 'dark',
   speed = 1,
   onSpeedChange,
   onAgentSelect,
 }) => {
-  const tokens = agentThemeTokens[colorScheme];
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const isDraggingRef = useRef(false);

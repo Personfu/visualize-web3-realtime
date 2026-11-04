@@ -1,8 +1,7 @@
 'use client';
 
-import { memo, useState } from 'react';
-import type { CategoryConfig, SourceConfig } from '@web3viz/core';
-import { COLOR_PALETTE } from './constants';
+import { memo,useState } from 'react';
+import type { CategoryConfig,SourceConfig } from '@web3viz/core';
 
 // ---------------------------------------------------------------------------
 // Types

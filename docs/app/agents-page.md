@@ -102,7 +102,6 @@ const { stats, agents, flows, executorState, agentStats, connected, events } = u
 Connects to the agent data source. Configuration:
 - `mock`: Defaults to `true` unless `NEXT_PUBLIC_AGENT_MOCK` is `'false'`.
 - `url`: WebSocket URL from `NEXT_PUBLIC_SPERAXOS_WS_URL`.
-- `apiKey`: API key from `NEXT_PUBLIC_SPERAXOS_API_KEY`.
 - `enabled`: Only connects when `demoActive` is `true`.
 
 Returns:
@@ -260,3 +259,5 @@ Linked from the World page:
 ```tsx
 <Link href="/agents">Agents</Link>
 ```
+
+For the current executor authorization, viewer-session and rollout requirements, see [executor security](../../docs/EXECUTOR-SECURITY.md). Do not expose upstream/control credentials in browser environment variables or URLs.

@@ -28,14 +28,14 @@ export class HealthMonitor {
 
   getHealth(): { status: 'healthy' | 'degraded' | 'critical'; checks: HealthCheck[] } {
     const results: HealthCheck[] = [];
-    for (const [, fn] of this.checks) {
+    for (const [name, fn] of this.checks) {
       try {
         results.push(fn());
-      } catch (err) {
+      } catch {
         results.push({
-          name: 'unknown',
+          name,
           status: 'fail',
-          message: String(err),
+          message: 'Health check failed',
           timestamp: Date.now(),
         });
       }

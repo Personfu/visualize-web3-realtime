@@ -1,8 +1,7 @@
 'use client';
 
-import React, { memo, type CSSProperties, type ReactNode } from 'react';
-import { fontFamily, fontSize, fontWeight } from '../tokens/typography';
-import { borderRadius, shadows } from '../tokens/spacing';
+import React,{ memo,type CSSProperties,type ReactNode } from 'react';
+import { fontFamily,fontSize,fontWeight } from '../tokens/typography';
 import { Dialog } from '../primitives/Dialog';
 
 // ============================================================================

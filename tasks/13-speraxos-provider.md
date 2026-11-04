@@ -205,7 +205,6 @@ Add environment variables for the SperaxOS connection:
 ```env
 # .env.local (add to .env.example too)
 NEXT_PUBLIC_SPERAXOS_WS_URL=wss://api.speraxos.io/agents/v1/stream
-NEXT_PUBLIC_SPERAXOS_API_KEY=
 NEXT_PUBLIC_AGENT_MOCK=true  # Use mock data when no API key
 ```
 
@@ -218,7 +217,6 @@ Update `hooks/useDataProvider.ts` to optionally consume agent provider stats alo
 const agentProvider = useAgentProvider({
   mock: process.env.NEXT_PUBLIC_AGENT_MOCK === 'true',
   url: process.env.NEXT_PUBLIC_SPERAXOS_WS_URL,
-  apiKey: process.env.NEXT_PUBLIC_SPERAXOS_API_KEY,
 });
 
 // Merge agent stats into the returned DataProviderStats
@@ -249,3 +247,5 @@ However, keep this merge **optional** — controlled by an `includeAgents` boole
 - [ ] Events are capped to prevent memory leaks (500 recent events max)
 - [ ] `npx next build` passes
 - [ ] Mock mode works without any API keys configured
+
+For the current executor authorization, viewer-session and rollout requirements, see [executor security](../docs/EXECUTOR-SECURITY.md). Do not expose upstream/control credentials in browser environment variables or URLs.

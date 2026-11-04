@@ -10,7 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 function useAnimatedValue(target: number, duration = 400): number {
   const [display, setDisplay] = useState(target);
   const prevRef = useRef(target);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const from = prevRef.current;
@@ -118,16 +118,20 @@ const AddressSearch = memo<{
   onSearch: (address: string) => void;
   externalError?: boolean;
 }>(({ onSearch, highlightedAddress, onDismiss, externalError }) => {
-  const [value, setValue] = useState('');
-  const [error, setError] = useState(false);
+  const [value, setValue] = useState(highlightedAddress ?? '');
+  const [previousHighlight, setPreviousHighlight] = useState(highlightedAddress);
+  if (previousHighlight !== highlightedAddress) {
+    setPreviousHighlight(highlightedAddress);
+    if (highlightedAddress) setValue(highlightedAddress);
+  }
+  const [error, setError] = useState(Boolean(externalError));
+  const [previousError, setPreviousError] = useState(externalError);
+  if (previousError !== externalError) {
+    setPreviousError(externalError);
+    if (externalError) setError(true);
+  }
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Sync input value when highlight changes
-  useEffect(() => {
-    if (highlightedAddress) {
-      setValue(highlightedAddress);
-    }
-  }, [highlightedAddress]);
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {
@@ -146,9 +150,6 @@ const AddressSearch = memo<{
   }, [onDismiss]);
 
   // Flash red border on error (internal or external)
-  useEffect(() => {
-    if (externalError) setError(true);
-  }, [externalError]);
 
   useEffect(() => {
     if (error) {

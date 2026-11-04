@@ -50,11 +50,13 @@ web3viz gives you all of it:
 ```bash
 git clone https://github.com/nirholas/visualize-web3-realtime.git
 cd visualize-web3-realtime
-npm install
+npm ci
 npm run dev
 ```
 
 Open **http://localhost:3100** — a live visualization of Solana PumpFun activity starts immediately. No API keys needed.
+
+For reproducible local setup, use the pinned Node/npm versions and `npm ci`. The live quick start connects to public data sources. Use the mock playground below for offline development; validation never needs wallet keys or a funded account. See [security validation and current limits](docs/SECURITY-VALIDATION.md).
 
 ### Use the mock provider for development
 

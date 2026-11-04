@@ -94,7 +94,7 @@ export class SolanaClaimsWebSocket {
           // Skip failed transactions
           if (value.err !== null) return;
 
-          const claim = this.parseClaimFromLogs(logs, signature, slot);
+          const claim = this.parseClaimFromLogs(logs, signature);
           if (!claim) return;
 
           // Emit categorized event
@@ -170,7 +170,6 @@ export class SolanaClaimsWebSocket {
   private parseClaimFromLogs(
     logs: string[],
     signature: string,
-    slot: number,
   ): { claimType: string; isFirstClaim: boolean; claimer: string; programId: string } | null {
     let claimType: string | null = null;
     let programId = '';

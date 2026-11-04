@@ -1,9 +1,9 @@
 'use client';
 
-import React, { memo, useCallback } from 'react';
+import React,{ memo } from 'react';
 import type { CategoryConfig } from '@web3viz/core';
-import { fontFamily, fontSize } from '../tokens/typography';
-import { borderRadius, shadows } from '../tokens/spacing';
+import { fontSize } from '../tokens/typography';
+import { borderRadius,shadows } from '../tokens/spacing';
 
 // ============================================================================
 // Protocol Button

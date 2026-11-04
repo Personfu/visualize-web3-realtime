@@ -1,8 +1,14 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": ["dom", "dom.iterable", "ES2022"],
-    "types": ["node"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "ES2022"
+    ],
+    "types": [
+      "node"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -12,21 +18,55 @@
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve",
+    "jsx": "react-jsx",
     "incremental": true,
-    "plugins": [{ "name": "next" }],
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
     "paths": {
-      "@/*": ["./*"],
-      "@web3viz/core": ["./packages/core/src/index.ts"],
-      "@web3viz/core/*": ["./packages/core/src/*/index.ts"],
-      "@web3viz/providers": ["./packages/providers/src/index.ts"],
-      "@web3viz/providers/*": ["./packages/providers/src/*/index.ts"],
-      "@web3viz/react-graph": ["./packages/react-graph/src/index.ts"],
-      "@web3viz/ui": ["./packages/ui/src/index.ts"],
-      "@web3viz/ui/*": ["./packages/ui/src/*/index.ts"],
-      "@web3viz/utils": ["./packages/utils/src/index.ts"]
+      "@/*": [
+        "./*"
+      ],
+      "@web3viz/core": [
+        "./packages/core/src/index.ts"
+      ],
+      "@web3viz/core/*": [
+        "./packages/core/src/*/index.ts"
+      ],
+      "@web3viz/providers": [
+        "./packages/providers/src/index.ts"
+      ],
+      "@web3viz/providers/*": [
+        "./packages/providers/src/*/index.ts"
+      ],
+      "@web3viz/react-graph": [
+        "./packages/react-graph/src/index.ts"
+      ],
+      "@web3viz/ui": [
+        "./packages/ui/src/index.ts"
+      ],
+      "@web3viz/ui/*": [
+        "./packages/ui/src/*/index.ts"
+      ],
+      "@web3viz/utils": [
+        "./packages/utils/src/index.ts"
+      ]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules", "packages/executor", "apps/playground", "providers", "temp"]
+  "include": [
+    "next-env.d.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    ".next/types/**/*.ts",
+    ".next/dev/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "packages/executor",
+    "apps/playground",
+    "providers",
+    "temp"
+  ]
 }

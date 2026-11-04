@@ -12,17 +12,14 @@
  */
 
 import type {
-  DataProvider,
-  DataProviderEvent,
-  DataProviderStats,
-  ConnectionState,
-  CategoryConfig,
-  SourceConfig,
-  RawEvent,
-  TopToken,
-  TraderEdge,
+DataProvider,
+DataProviderEvent,
+DataProviderStats,
+ConnectionState,
+CategoryConfig,
+SourceConfig,TopToken
 } from '@web3viz/core';
-import { registerProvider, getCategoriesForSource, SOURCE_CONFIG_MAP } from '@web3viz/core';
+import { registerProvider,getCategoriesForSource,SOURCE_CONFIG_MAP } from '@web3viz/core';
 
 import { BinanceTradeStream } from './binance-trades';
 import { BinanceLiquidationStream } from './binance-liquidations';
@@ -151,15 +148,18 @@ export class CexVolumeProvider implements DataProvider {
     if (existing) {
       existing.trades++;
       existing.volume += trade.volumeUsd;
+      existing.volumeSol += trade.volumeUsd;
       existing.volumeUsd = (existing.volumeUsd ?? 0) + trade.volumeUsd;
     } else {
       this.symbolAcc.set(trade.symbol, {
         tokenAddress: trade.symbol,
+        mint: trade.symbol,
         symbol: trade.baseAsset,
         name: trade.baseAsset,
         chain: 'cex',
         trades: 1,
         volume: trade.volumeUsd,
+        volumeSol: trade.volumeUsd,
         nativeSymbol: 'USD',
         volumeUsd: trade.volumeUsd,
       });

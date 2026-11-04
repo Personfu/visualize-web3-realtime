@@ -1,6 +1,6 @@
 'use client';
 
-import { PumpFunProvider, MockProvider, AgentProvider } from '@web3viz/providers';
+import { PumpFunProvider,AgentProvider } from '@web3viz/providers';
 
 // ---------------------------------------------------------------------------
 // Data Provider Registration

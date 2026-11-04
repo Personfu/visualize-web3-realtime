@@ -1,8 +1,8 @@
 'use client';
 
-import React, { memo, type CSSProperties, type ReactNode } from 'react';
+import { memo,type CSSProperties } from 'react';
 import { m } from 'framer-motion';
-import { fontFamily, fontSize, fontWeight } from '../tokens/typography';
+import { fontFamily,fontSize,fontWeight } from '../tokens/typography';
 import { Button } from '../primitives/Button';
 
 // ============================================================================

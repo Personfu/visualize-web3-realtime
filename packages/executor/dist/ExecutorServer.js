@@ -1,5 +1,6 @@
-import { createServer } from 'http';
-import { URL } from 'url';
+import { createServer } from 'node:http';
+import { ExecutorAccess } from './ExecutorAccess.js';
+import { createExecutorRestHandler } from './ExecutorRest.js';
 import { TaskQueue } from './TaskQueue.js';
 import { AgentManager } from './AgentManager.js';
 import { EventBroadcaster } from './EventBroadcaster.js';
@@ -9,6 +10,8 @@ import { StateStore } from './StateStore.js';
 export const DEFAULT_AGENT_ROLES = ['coder', 'researcher', 'planner'];
 export class ExecutorServer {
     config;
+    access;
+    handleRest;
     queue;
     agentManager;
     broadcaster;
@@ -23,10 +26,12 @@ export class ExecutorServer {
     recentEvents = [];
     constructor(config) {
         this.config = config;
+        // Validate inbound authority before any upstream client or state store is created.
+        this.access = new ExecutorAccess(config.accessToken, config.allowedOrigins, config.viewerToken);
         this.speraxos = new SperaxOSClient(config.speraxosUrl, config.speraxosApiKey);
         this.queue = new TaskQueue();
         this.agentManager = new AgentManager(this.speraxos);
-        this.broadcaster = new EventBroadcaster(config.port);
+        this.broadcaster = new EventBroadcaster(config.port, this.access);
         this.health = new HealthMonitor();
         this.stateStore = new StateStore(config.statePath);
         // Forward agent events to broadcaster and state store
@@ -36,143 +41,39 @@ export class ExecutorServer {
                 this.recentEvents = this.recentEvents.slice(-500);
             this.broadcaster.broadcast(event);
             this.stateStore.saveEvent(event);
+            // Sync task completion/failure back to the queue
+            if (event.type === 'task:completed' && event.taskId) {
+                this.queue.complete(event.taskId, String(event.payload.result ?? ''));
+                const tasks = this.queue.getAll();
+                const task = tasks.find((t) => t.taskId === event.taskId);
+                if (task)
+                    this.stateStore.saveTask(task);
+            }
+            else if (event.type === 'task:failed' && event.taskId) {
+                this.queue.fail(event.taskId, String(event.payload.error ?? 'Unknown error'));
+                const tasks = this.queue.getAll();
+                const task = tasks.find((t) => t.taskId === event.taskId);
+                if (task)
+                    this.stateStore.saveTask(task);
+            }
+        });
+        this.handleRest = createExecutorRestHandler(this.access, {
+            getStatus: () => this.getStatus(),
+            getHealth: () => this.health.getHealth(),
+            getAgents: () => this.agentManager.getActiveAgents(),
+            getTasks: () => this.queue.getAll(),
+            enqueueTask: definition => this.enqueueTask(definition),
+            spawnAgent: config => this.agentManager.spawnAgent(config),
+            saveAgent: agent => this.stateStore.saveAgent(agent),
+            stopAgent: agentId => this.agentManager.shutdownAgent(agentId),
         });
         this.setupHealthChecks();
-    }
-    parseRequestBody(req) {
-        return new Promise((resolve) => {
-            let body = '';
-            req.on('data', (chunk) => {
-                body += chunk;
-                if (body.length > 1024 * 1024) {
-                    resolve({});
-                    return;
-                }
-            });
-            req.on('end', () => {
-                try {
-                    const parsed = body ? JSON.parse(body) : {};
-                    const result = typeof parsed === 'object' && parsed !== null ? parsed : {};
-                    resolve(result);
-                }
-                catch {
-                    resolve({});
-                }
-            });
-            req.on('error', () => {
-                resolve({});
-            });
-        });
-    }
-    handleRESTRequest(req, res) {
-        const url = new URL(req.url, `http://${req.headers.host}`);
-        const path = url.pathname;
-        const method = req.method;
-        // CORS headers
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        res.setHeader('Content-Type', 'application/json');
-        if (method === 'OPTIONS') {
-            res.writeHead(200);
-            res.end();
-            return;
-        }
-        // Route matching
-        if (path === '/api/status' && method === 'GET') {
-            const state = this.getStatus();
-            const health = this.health.getHealth();
-            res.writeHead(200);
-            res.end(JSON.stringify({ state, health }));
-        }
-        else if (path === '/api/agents' && method === 'GET') {
-            const agents = this.agentManager.getActiveAgents();
-            res.writeHead(200);
-            res.end(JSON.stringify(agents));
-        }
-        else if (path === '/api/tasks' && method === 'GET') {
-            const tasks = this.queue.getAll();
-            res.writeHead(200);
-            res.end(JSON.stringify(tasks));
-        }
-        else if (path.match(/^\/api\/tasks\/[^/]+$/) && method === 'GET') {
-            const taskId = path.split('/').pop();
-            const tasks = this.queue.getAll();
-            const task = tasks.find((t) => t.taskId === taskId);
-            if (task) {
-                res.writeHead(200);
-                res.end(JSON.stringify(task));
-            }
-            else {
-                res.writeHead(404);
-                res.end(JSON.stringify({ error: 'Task not found' }));
-            }
-        }
-        else if (path === '/api/tasks' && method === 'POST') {
-            this.parseRequestBody(req)
-                .then((body) => {
-                const definition = {
-                    description: String(body.description || 'Unnamed task'),
-                    priority: typeof body.priority === 'number' ? body.priority : undefined,
-                    requiredRole: typeof body.requiredRole === 'string' ? body.requiredRole : undefined,
-                    timeout: typeof body.timeout === 'number' ? body.timeout : undefined,
-                    retryCount: typeof body.retryCount === 'number' ? body.retryCount : undefined,
-                    metadata: typeof body.metadata === 'object' && body.metadata !== null ? body.metadata : undefined,
-                };
-                const taskId = this.enqueueTask(definition);
-                res.writeHead(201);
-                res.end(JSON.stringify({ taskId }));
-            })
-                .catch(() => {
-                res.writeHead(400);
-                res.end(JSON.stringify({ error: 'Invalid request body' }));
-            });
-        }
-        else if (path.match(/^\/api\/tasks\/[^/]+$/) && method === 'DELETE') {
-            res.writeHead(501);
-            res.end(JSON.stringify({ error: 'Task cancellation not yet implemented' }));
-        }
-        else if (path === '/api/agents/spawn' && method === 'POST') {
-            this.parseRequestBody(req)
-                .then((body) => {
-                this.agentManager.spawnAgent({ role: String(body.role || 'coder'), name: String(body.name || '') })
-                    .then((agent) => {
-                    this.stateStore.saveAgent(agent);
-                    res.writeHead(201);
-                    res.end(JSON.stringify(agent));
-                })
-                    .catch((err) => {
-                    res.writeHead(500);
-                    res.end(JSON.stringify({ error: String(err) }));
-                });
-            })
-                .catch(() => {
-                res.writeHead(400);
-                res.end(JSON.stringify({ error: 'Invalid request body' }));
-            });
-        }
-        else if (path.match(/^\/api\/agents\/[^/]+\/stop$/) && method === 'POST') {
-            const agentId = path.split('/').slice(-2, -1)[0];
-            this.agentManager.shutdownAgent(agentId)
-                .then(() => {
-                res.writeHead(200);
-                res.end(JSON.stringify({ agentId, status: 'stopped' }));
-            })
-                .catch((err) => {
-                res.writeHead(500);
-                res.end(JSON.stringify({ error: String(err) }));
-            });
-        }
-        else {
-            res.writeHead(404);
-            res.end(JSON.stringify({ error: 'Not found' }));
-        }
     }
     setupHealthChecks() {
         this.health.addCheck('speraxos', () => ({
             name: 'speraxos',
-            status: 'pass',
-            message: 'SperaxOS connection OK (mock mode)',
+            status: this.config.speraxosApiKey ? 'warn' : 'pass',
+            message: this.config.speraxosApiKey ? 'Upstream connectivity has not been verified' : 'Synthetic mock mode; no upstream connection',
             timestamp: Date.now(),
         }));
         this.health.addCheck('queue', () => {
@@ -194,6 +95,32 @@ export class ExecutorServer {
                 timestamp: Date.now(),
             };
         });
+        this.health.addCheck('memory', () => {
+            const usage = process.memoryUsage();
+            const heapMB = Math.round(usage.heapUsed / 1024 / 1024);
+            const threshold = 512; // MB
+            return {
+                name: 'memory',
+                status: heapMB > threshold ? 'warn' : 'pass',
+                message: `Heap: ${heapMB}MB`,
+                timestamp: Date.now(),
+            };
+        });
+        this.health.addCheck('event_rate', () => {
+            const recentCount = this.recentEvents.length;
+            const now = Date.now();
+            // Check if events have flowed in the last 2 minutes (only warn if agents are active)
+            const twoMinAgo = now - 120_000;
+            const recentEventsInWindow = this.recentEvents.filter((e) => e.timestamp > twoMinAgo).length;
+            const agentCount = this.agentManager.getAgentCount();
+            const stuck = agentCount > 0 && recentEventsInWindow === 0 && this.running && (now - this.startedAt > 120_000);
+            return {
+                name: 'event_rate',
+                status: stuck ? 'warn' : 'pass',
+                message: `${recentEventsInWindow} events in last 2min (total buffered: ${recentCount})`,
+                timestamp: now,
+            };
+        });
     }
     async start() {
         this.startedAt = Date.now();
@@ -201,6 +128,15 @@ export class ExecutorServer {
         console.log('[ExecutorServer] Starting...');
         // Initialize state store metadata
         this.stateStore.setMeta('start_time', String(this.startedAt));
+        // Restore persisted tasks from previous run
+        const restoredTasks = this.stateStore.loadActiveTasks();
+        for (const task of restoredTasks) {
+            // Re-enqueue tasks that were queued or in-progress (stalled) before crash
+            this.queue.enqueue({ description: task.description, priority: task.priority, requiredRole: undefined }, '');
+            console.log(`[ExecutorServer] Restored task: ${task.taskId} (${task.status})`);
+        }
+        // Load recent events for snapshot
+        this.recentEvents = this.stateStore.loadRecentEvents(50);
         // Start HTTP server (shared by both REST API and WebSocket)
         this.httpServer = createServer((req, res) => {
             // Only handle REST API requests here (non-upgrade requests)
@@ -209,7 +145,7 @@ export class ExecutorServer {
                 res.end();
                 return;
             }
-            this.handleRESTRequest(req, res);
+            this.handleRest(req, res);
         });
         // Start WebSocket server on the same HTTP server
         this.broadcaster.start(() => ({
@@ -218,7 +154,9 @@ export class ExecutorServer {
             recentEvents: this.recentEvents.slice(-50),
         }), this.httpServer);
         // Listen on the shared HTTP server
-        this.httpServer.listen(this.config.port, () => {
+        this.httpServer.requestTimeout = 30_000;
+        this.httpServer.headersTimeout = 15_000;
+        this.httpServer.listen(this.config.port, this.config.host ?? '127.0.0.1', () => {
             console.log(`[ExecutorServer] Ready on http://localhost:${this.config.port} (REST API + WebSocket)`);
         });
         // Spawn initial agents
@@ -261,9 +199,9 @@ export class ExecutorServer {
             // Persist task to state store after assignment
             this.stateStore.saveTask(task);
         }
-        catch (err) {
-            console.error('[ExecutorServer] Task assignment failed:', err);
-            this.queue.fail(task.taskId, String(err));
+        catch {
+            console.error('[ExecutorServer] Task assignment failed');
+            this.queue.fail(task.taskId, 'Task assignment failed');
         }
     }
     sendHeartbeat() {
