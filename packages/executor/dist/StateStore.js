@@ -1,6 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { prepareStatePath } from './statePath.js';
 /**
  * Persistent state store using SQLite.
  * Survives process restarts via database tables.
@@ -8,10 +7,7 @@ import { dirname } from 'path';
 export class StateStore {
     db;
     constructor(dbPath) {
-        // Create directory if it doesn't exist
-        const dir = dirname(dbPath);
-        mkdirSync(dir, { recursive: true });
-        this.db = new Database(dbPath);
+        this.db = new Database(prepareStatePath(dbPath));
         this.db.pragma('journal_mode = WAL');
         this.initializeSchema();
     }

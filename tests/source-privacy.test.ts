@@ -5,7 +5,8 @@ import { test } from 'node:test';
 
 test('machine-specific compiler caches cannot enter the published source tree', () => {
   const files = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' }).split('\0');
-  assert.deepEqual(files.filter(file => /(?:^|\/)(?:__pycache__|\.turbo)\/|\.(?:pyc|tsbuildinfo)$/.test(file)), []);
+  const generated = files.filter(file => file.split('/').some(part => part === '__pycache__' || part === '.turbo') || file.endsWith('.pyc') || file.endsWith('.tsbuildinfo'));
+  assert.deepEqual(generated, []);
 });
 
 test('tracked source and documentation contain no literal credential-bearing RPC fallback', () => {

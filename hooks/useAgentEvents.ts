@@ -413,13 +413,14 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
 
     let protocols: string[];
+    let endpoint: string;
     try {
-      validateViewerUrl(url);
+      endpoint = validateViewerUrl(url, apiKey !== undefined);
       protocols = executorProtocols(apiKey);
     } catch {
       return;
     }
-    const ws = new WebSocket(url, protocols);
+    const ws = new WebSocket(endpoint, protocols);
     wsRef.current = ws;
 
     ws.onopen = () => {

@@ -1,6 +1,5 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { prepareStatePath } from './statePath.js';
 import type { AgentIdentity, AgentTask, AgentEvent } from './types.js';
 
 type AgentRow = { id: string; name: string; role: string; address: string | null; parent_agent_id: string | null; created_at: number };
@@ -15,11 +14,7 @@ export class StateStore {
   private db: Database.Database;
 
   constructor(dbPath: string) {
-    // Create directory if it doesn't exist
-    const dir = dirname(dbPath);
-    mkdirSync(dir, { recursive: true });
-
-    this.db = new Database(dbPath);
+    this.db = new Database(prepareStatePath(dbPath));
     this.db.pragma('journal_mode = WAL');
     this.initializeSchema();
   }

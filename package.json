@@ -17,7 +17,7 @@
     "lint": "eslint . --max-warnings=0",
     "typecheck": "npm run typecheck:web && npm run typecheck:executor && turbo run typecheck",
     "typecheck:web": "tsc --noEmit",
-    "test:offline": "tsx --test tests/mock-provider.test.ts tests/executor-access.test.ts tests/react-lifecycle.test.tsx tests/provider-message.test.ts tests/source-privacy.test.ts tests/world-chat-request.test.ts && node --test tests/security/browser-policy.test.mjs",
+    "test:offline": "tsx --test tests/mock-provider.test.ts tests/executor-access.test.ts tests/react-lifecycle.test.tsx tests/provider-message.test.ts tests/source-privacy.test.ts tests/world-chat-request.test.ts tests/transport-state-boundaries.test.ts && node --test tests/security/browser-policy.test.mjs",
     "typecheck:executor": "tsc --noEmit --project packages/executor/tsconfig.json",
     "test:ui:offline": "node tests/ui-offline.mjs"
   },
