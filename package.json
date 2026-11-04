@@ -15,11 +15,12 @@
     "build:web": "next build --webpack",
     "start": "next start -p 3100",
     "lint": "eslint . --max-warnings=0",
-    "typecheck": "npm run typecheck:web && npm run typecheck:executor && turbo run typecheck",
+    "typecheck": "npm run typecheck:web && npm run typecheck:executor && npm run typecheck:transports && turbo run typecheck",
     "typecheck:web": "tsc --noEmit",
-    "test:offline": "tsx --test tests/mock-provider.test.ts tests/executor-access.test.ts tests/react-lifecycle.test.tsx tests/provider-message.test.ts tests/source-privacy.test.ts tests/world-chat-request.test.ts tests/transport-state-boundaries.test.ts && node --test tests/security/browser-policy.test.mjs tests/lint-scope.test.mjs",
+    "test:offline": "tsx --test tests/mock-provider.test.ts tests/executor-access.test.ts tests/react-lifecycle.test.tsx tests/provider-message.test.ts tests/source-privacy.test.ts tests/world-chat-request.test.ts tests/transport-state-boundaries.test.ts tests/provider-log-privacy.test.mjs && node --test tests/security/browser-policy.test.mjs tests/lint-scope.test.mjs",
     "typecheck:executor": "tsc --noEmit --project packages/executor/tsconfig.json",
-    "test:ui:offline": "node tests/ui-offline.mjs"
+    "test:ui:offline": "node tests/ui-offline.mjs",
+    "typecheck:transports": "tsc --noEmit --strict --target ES2022 --moduleResolution Bundler --module ESNext --esModuleInterop --skipLibCheck --lib DOM,ES2022 providers/_shared/evm-ws.ts providers/erc8004/erc8004-ws.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",

@@ -67,6 +67,7 @@ export class EvmWebSocket {
   private ws: WebSocket | null = null;
   private config: EvmWebSocketConfig;
   private connected = false;
+  private active = false;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private eventBuffer: DataProviderEvent[] = [];
   private lastEmitTime = 0;
@@ -77,28 +78,35 @@ export class EvmWebSocket {
   }
 
   connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    this.active = true;
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
 
     const url = this.useFallback ? this.config.fallbackUrl : this.config.wsUrl;
 
     try {
       this.ws = new WebSocket(url);
       this.setupHandlers();
-    } catch (error) {
-      console.error(`Failed to create ${this.config.chain} WebSocket:`, error);
+    } catch {
+      console.error('EVM WebSocket creation failed');
       this.scheduleReconnect();
     }
   }
 
   disconnect(): void {
+    this.active = false;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
 
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    const socket = this.ws;
+    this.ws = null;
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      socket.close();
     }
 
     this.connected = false;
@@ -113,17 +121,19 @@ export class EvmWebSocket {
   // -------------------------------------------------------------------------
 
   private setupHandlers(): void {
-    if (!this.ws) return;
+    const socket = this.ws;
+    if (!socket) return;
 
-    this.ws.onopen = () => {
+    socket.onopen = () => {
+      if (!this.active || this.ws !== socket) return;
       this.connected = true;
       this.useFallback = false; // Reset on successful connection
-      console.log(`${this.config.chain} WebSocket connected`);
+      console.log('EVM WebSocket connected');
       this.subscribe();
     };
 
-    this.ws.onmessage = (event) => {
-      if (this.config.isPaused()) return;
+    socket.onmessage = (event) => {
+      if (!this.active || this.ws !== socket || this.config.isPaused()) return;
 
       try {
         const msg = JSON.parse(event.data) as JsonRpcMessage;
@@ -133,14 +143,17 @@ export class EvmWebSocket {
       }
     };
 
-    this.ws.onclose = () => {
-      console.log(`${this.config.chain} WebSocket closed`);
+    socket.onclose = () => {
+      if (!this.active || this.ws !== socket) return;
+      this.ws = null;
+      console.log('EVM WebSocket closed');
       this.connected = false;
       this.scheduleReconnect();
     };
 
-    this.ws.onerror = (error) => {
-      console.error(`${this.config.chain} WebSocket error:`, error);
+    socket.onerror = () => {
+      if (!this.active || this.ws !== socket) return;
+      console.error('EVM WebSocket transport error');
       this.connected = false;
       if (this.ws) {
         this.ws.close();
@@ -171,7 +184,7 @@ export class EvmWebSocket {
   private handleMessage(msg: JsonRpcMessage): void {
     // Handle subscription confirmation
     if (msg.result && typeof msg.result === 'string') {
-      console.log(`${this.config.chain} subscription ID:`, msg.result);
+      console.log('EVM subscription acknowledged');
       return;
     }
 
@@ -383,6 +396,7 @@ export class EvmWebSocket {
   }
 
   private scheduleReconnect(): void {
+    if (!this.active) return;
     if (this.reconnectTimeout) return;
 
     // Try fallback URL on next reconnect
@@ -390,7 +404,7 @@ export class EvmWebSocket {
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
-      this.connect();
+      if (this.active) this.connect();
     }, 3000);
   }
 }
