@@ -23,7 +23,7 @@
     "typecheck:transports": "tsc --noEmit --strict --target ES2022 --moduleResolution Bundler --module ESNext --esModuleInterop --skipLibCheck --lib DOM,ES2022 providers/_shared/evm-ws.ts providers/erc8004/erc8004-ws.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.82.0",
+    "@anthropic-ai/sdk": "^0.91.1",
     "@react-three/drei": "10.7.9",
     "@react-three/fiber": "9.8.2",
     "@react-three/postprocessing": "3.2.2",
