@@ -34,6 +34,7 @@ export class ERC8004WebSocket {
   private ws: WebSocket | null = null;
   private config: ERC8004WSConfig;
   private connected = false;
+  private active = false;
   private reconnectTimeout: ReturnType<typeof setTimeout> | null = null;
   private eventBuffer: DataProviderEvent[] = [];
   private lastEmitTime = 0;
@@ -47,26 +48,33 @@ export class ERC8004WebSocket {
   }
 
   connect(): void {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+    this.active = true;
+    if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) return;
 
     try {
       this.ws = new WebSocket(this.config.wsUrl);
       this.setupHandlers();
-    } catch (error) {
-      console.error(`ERC-8004 (${this.config.chain}) WebSocket creation failed:`, error);
+    } catch {
+      console.error('ERC-8004 WebSocket creation failed');
       this.scheduleReconnect();
     }
   }
 
   disconnect(): void {
+    this.active = false;
     if (this.reconnectTimeout) {
       clearTimeout(this.reconnectTimeout);
       this.reconnectTimeout = null;
     }
 
-    if (this.ws) {
-      this.ws.close();
-      this.ws = null;
+    const socket = this.ws;
+    this.ws = null;
+    if (socket) {
+      socket.onopen = null;
+      socket.onmessage = null;
+      socket.onerror = null;
+      socket.onclose = null;
+      socket.close();
     }
 
     this.connected = false;
@@ -77,16 +85,18 @@ export class ERC8004WebSocket {
   }
 
   private setupHandlers(): void {
-    if (!this.ws) return;
+    const socket = this.ws;
+    if (!socket) return;
 
-    this.ws.onopen = () => {
+    socket.onopen = () => {
+      if (!this.active || this.ws !== socket) return;
       this.connected = true;
-      console.log(`ERC-8004 (${this.config.chain}) WebSocket connected`);
+      console.log('ERC-8004 WebSocket connected');
       this.subscribe();
     };
 
-    this.ws.onmessage = (event) => {
-      if (this.config.isPaused()) return;
+    socket.onmessage = (event) => {
+      if (!this.active || this.ws !== socket || this.config.isPaused()) return;
 
       try {
         const msg = JSON.parse(event.data) as JsonRpcMessage;
@@ -96,14 +106,17 @@ export class ERC8004WebSocket {
       }
     };
 
-    this.ws.onclose = () => {
-      console.log(`ERC-8004 (${this.config.chain}) WebSocket closed`);
+    socket.onclose = () => {
+      if (!this.active || this.ws !== socket) return;
+      this.ws = null;
+      console.log('ERC-8004 WebSocket closed');
       this.connected = false;
       this.scheduleReconnect();
     };
 
-    this.ws.onerror = (error) => {
-      console.error(`ERC-8004 (${this.config.chain}) WebSocket error:`, error);
+    socket.onerror = () => {
+      if (!this.active || this.ws !== socket) return;
+      console.error('ERC-8004 WebSocket transport error');
       this.connected = false;
       if (this.ws) {
         this.ws.close();
@@ -135,7 +148,7 @@ export class ERC8004WebSocket {
   private handleMessage(msg: JsonRpcMessage): void {
     // Handle subscription confirmation
     if (msg.result && typeof msg.result === 'string') {
-      console.log(`ERC-8004 (${this.config.chain}) subscription ID:`, msg.result);
+      console.log('ERC-8004 subscription acknowledged');
       return;
     }
 
@@ -315,11 +328,12 @@ export class ERC8004WebSocket {
   }
 
   private scheduleReconnect(): void {
+    if (!this.active) return;
     if (this.reconnectTimeout) return;
 
     this.reconnectTimeout = setTimeout(() => {
       this.reconnectTimeout = null;
-      this.connect();
+      if (this.active) this.connect();
     }, 5000);
   }
 }
