@@ -22,6 +22,8 @@ const AgentLoadingScreen = memo<AgentLoadingScreenProps>(({ ready }) => {
 
   return (
     <div
+      role="status"
+      aria-label="Preparing agent visualization"
       style={{
         position: 'fixed',
         inset: 0,
@@ -71,7 +73,7 @@ const AgentLoadingScreen = memo<AgentLoadingScreenProps>(({ ready }) => {
           textTransform: 'uppercase',
         }}
       >
-        Connecting to agent executor...
+        Preparing agent visualization...
       </div>
 
       {/* Dots */}

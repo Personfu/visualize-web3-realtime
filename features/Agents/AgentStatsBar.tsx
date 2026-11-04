@@ -135,6 +135,8 @@ const AgentStatsBar = memo<AgentStatsBarProps>(
           transform: 'translateX(-50%)',
           zIndex: 20,
           display: 'flex',
+          width: 'max-content',
+          maxWidth: 'calc(100vw - 24px)',
           alignItems: 'center',
           gap: 12,
           padding: '8px 16px',

@@ -71,8 +71,9 @@ function AgentsPageInner() {
   const downloading = false;
   const [demoActive, setDemoActive] = useState(false);
 
+  const mockMode = process.env.NEXT_PUBLIC_AGENT_MOCK !== 'false';
   const { stats, agents, flows, executorState, agentStats, connected } = useAgentProvider({
-    mock: process.env.NEXT_PUBLIC_AGENT_MOCK !== 'false',
+    mock: mockMode,
     url: process.env.NEXT_PUBLIC_SPERAXOS_WS_URL,
     enabled: demoActive,
   });
@@ -255,6 +256,7 @@ function AgentsPageInner() {
 
       {/* Executor health banner — top of graph area */}
       <ExecutorBanner
+        simulation={mockMode}
         executorState={executorState}
         connected={connected}
         lastHeartbeat={executorState?.lastHeartbeat}
@@ -307,7 +309,7 @@ function AgentsPageInner() {
       </div>
 
       {/* Live event feed — right */}
-      {feedVisible && (
+      {!isMobile && feedVisible && (
         <AgentLiveFeed
           events={recentAgentEvents}
           agents={agents}
@@ -444,7 +446,7 @@ function AgentsPageInner() {
             background: connected ? '#34d399' : '#6b7280',
           }}
         />
-        {connected ? 'live' : 'mock'}
+        {mockMode ? 'offline demo' : connected ? 'live' : 'disconnected'}
       </div>
 
       {/* Feed toggle button */}
@@ -558,7 +560,7 @@ function AgentsPageInner() {
               marginBottom: 24,
             }}
           >
-            No agent executor connected. Run a demo to preview the visualization.
+            No executor connected. The demo uses fictional agents and performs no real tool calls or trades.
           </span>
           <button
             onClick={() => setDemoActive(true)}

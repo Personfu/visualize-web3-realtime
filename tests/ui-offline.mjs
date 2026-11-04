@@ -76,7 +76,10 @@ async function main() {
           assert.equal(response.status(), 200);
           if (path === '/agents') {
             await page.getByRole('button', { name: 'Run Demo', exact: true }).click();
-            await page.getByText('CodeReviewer', { exact: true }).first().waitFor({ state: 'visible' });
+            await page.getByRole('status').filter({ hasText: 'SYNTHETIC DEMO' }).waitFor({ state: 'visible' });
+            await page.getByRole('status', { name: 'Preparing agent visualization' }).waitFor({ state: 'hidden' });
+            if (viewport.width >= 768) await page.getByText('CodeReviewer', { exact: true }).first().waitFor({ state: 'visible' });
+            else assert.equal(await page.getByText(/agent activity/i).count(), 0, 'The desktop feed must not obscure the mobile graph');
             assert.equal(await page.getByRole('button', { name: 'Run Demo', exact: true }).count(), 0);
           }
           // Agents also has a 2D timeline canvas. Require Three's actual renderer.

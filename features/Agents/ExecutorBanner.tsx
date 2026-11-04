@@ -4,6 +4,7 @@ import { memo,useEffect,useMemo,useState } from 'react';
 import type { ExecutorState } from '@web3viz/core';
 
 interface ExecutorBannerProps {
+  simulation?: boolean;
   executorState: ExecutorState | null;
   connected: boolean;
   lastHeartbeat?: number;
@@ -34,7 +35,7 @@ const HEALTH_COLORS: Record<Health, { bg: string; border: string; text: string }
 
 const RECONNECT_INTERVAL = 5; // seconds
 
-const ExecutorBanner = memo<ExecutorBannerProps>(({ executorState, connected, lastHeartbeat, sidebarWidth = 200, feedWidth = 260 }) => {
+const ExecutorBanner = memo<ExecutorBannerProps>(({ executorState, connected, lastHeartbeat, sidebarWidth = 200, feedWidth = 260, simulation = false }) => {
   const [reconnectCountdown, setReconnectCountdown] = useState(RECONNECT_INTERVAL);
 
   const health = useMemo<Health>(() => {
@@ -50,6 +51,7 @@ const ExecutorBanner = memo<ExecutorBannerProps>(({ executorState, connected, la
 
   // Reconnecting countdown timer
   useEffect(() => {
+    if (simulation) return;
     if (health !== 'reconnecting' && health !== 'offline') {
       setReconnectCountdown(RECONNECT_INTERVAL);
       return;
@@ -58,11 +60,12 @@ const ExecutorBanner = memo<ExecutorBannerProps>(({ executorState, connected, la
       setReconnectCountdown((prev) => (prev <= 1 ? RECONNECT_INTERVAL : prev - 1));
     }, 1000);
     return () => clearInterval(interval);
-  }, [health]);
+  }, [health, simulation]);
 
   const colors = HEALTH_COLORS[health];
 
   const message = useMemo(() => {
+    if (simulation) return connected ? '● SYNTHETIC DEMO' : '○ DEMO READY';
     if (health === 'offline') {
       if (lastHeartbeat) {
         const ageSecs = Math.floor((Date.now() - lastHeartbeat) / 1000);
@@ -80,7 +83,7 @@ const ExecutorBanner = memo<ExecutorBannerProps>(({ executorState, connected, la
     const agents = executorState?.activeAgents.length ?? 0;
     const uptime = executorState ? formatUptime(executorState.uptime) : '—';
     return `● EXECUTOR RUNNING · ${agents} agents · uptime ${uptime}`;
-  }, [health, executorState, lastHeartbeat, reconnectCountdown]);
+  }, [health, executorState, lastHeartbeat, reconnectCountdown, simulation, connected]);
 
   return (
     <div
@@ -97,7 +100,7 @@ const ExecutorBanner = memo<ExecutorBannerProps>(({ executorState, connected, la
         padding: '4px 16px',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
+        justifyContent: simulation ? 'flex-start' : 'center',
         fontFamily: "'IBM Plex Mono', monospace",
         fontSize: 9,
         letterSpacing: '0.1em',

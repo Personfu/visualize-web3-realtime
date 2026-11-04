@@ -284,10 +284,9 @@ Only `app/` and `features/` are scanned for classes. The `packages/` directory u
 | Variable | Default | Purpose |
 |---|---|---|
 | `NEXT_PUBLIC_SPERAXOS_WS_URL` | `wss://api.speraxos.io/agents/v1/stream` | WebSocket endpoint for real-time agent events from SperaxOS |
-| `NEXT_PUBLIC_SPERAXOS_API_KEY` | *(empty)* | API key for SperaxOS authentication |
 | `NEXT_PUBLIC_AGENT_MOCK` | `true` | When `true`, uses mock agent data instead of real SperaxOS |
 | `EXECUTOR_PORT` | `8765` | Port for the executor WebSocket server |
-| `EXECUTOR_MAX_AGENTS` | `5` | Maximum concurrent agents the executor will manage |
+| `MAX_AGENTS` | `5` | Maximum concurrent agents the executor will manage |
 | `SPERAXOS_URL` | `https://api.speraxos.io` | SperaxOS REST API base URL (used by executor) |
 | `SPERAXOS_API_KEY` | *(empty)* | API key for executor → SperaxOS communication |
 | `STATE_PATH` | `./data/executor.db` | SQLite database path for executor state persistence |
@@ -643,7 +642,6 @@ Used to filter which tool calls are visible in the graph.
 const { stats, agents, flows, executorState, agentStats, connected, events } = useAgentProvider({
   mock: process.env.NEXT_PUBLIC_AGENT_MOCK !== 'false',
   url: process.env.NEXT_PUBLIC_SPERAXOS_WS_URL,
-  apiKey: process.env.NEXT_PUBLIC_SPERAXOS_API_KEY,
   enabled: demoActive,
 });
 ```
@@ -3079,3 +3077,5 @@ SQLite shared memory and write-ahead log files. Created automatically by SQLite 
 ---
 
 *This document was generated from a complete reading of every source file in the repository.*
+
+For the current executor authorization, viewer-session and rollout requirements, see [executor security](docs/EXECUTOR-SECURITY.md). Do not expose upstream/control credentials in browser environment variables or URLs.

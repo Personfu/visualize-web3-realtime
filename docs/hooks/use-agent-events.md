@@ -96,7 +96,7 @@ Configuration object for the `useAgentEvents` hook.
 | Field | Type | Default | Description |
 |---|---|---|---|
 | `url` | `string` | (required) | SperaxOS WebSocket endpoint URL |
-| `apiKey` | `string` | `undefined` | Optional API key appended as query parameter |
+| `apiKey` | `string` | `undefined` | Optional read-only viewer session token, sent as a WebSocket subprotocol; keep it in memory |
 | `autoConnect` | `boolean` | `true` | Whether to connect automatically on component mount |
 | `reconnectDelay` | `number` | `3000` | Base delay in milliseconds before reconnect attempt |
 | `maxReconnectAttempts` | `number` | `10` | Maximum number of reconnection attempts before giving up |
@@ -183,7 +183,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
 
 Destructures `options` with defaults:
 - `url` -- Required WebSocket URL
-- `apiKey` -- Optional authentication key
+- `apiKey` -- Optional read-only executor viewer token; never an upstream or executor control credential
 - `autoConnect` -- Defaults to `true`
 - `reconnectDelay` -- Defaults to `3000` ms
 - `maxReconnectAttempts` -- Defaults to `10`
@@ -276,7 +276,7 @@ const connect = useCallback(() => { ... }, [url, apiKey, reconnectDelay, maxReco
 ```
 
 1. Guards against double-connection if WebSocket is already open.
-2. Constructs the WebSocket URL, appending `apiKey` as a query parameter if provided.
+2. Validates a credential-free WSS URL (WS only on loopback) and supplies the optional read-only viewer token as the `web3viz.auth.` subprotocol. Query credentials are rejected.
 3. Creates a new `WebSocket` instance and stores it in `wsRef`.
 4. **`onopen`**: Sets `connected` to `true`, resets reconnect attempts to 0, starts the heartbeat timer.
 5. **`onmessage`**: Parses incoming JSON as `AgentEvent`. Validates that `eventId`, `type`, and `timestamp` exist before calling `processEvent`.
@@ -335,8 +335,7 @@ function AgentDashboard() {
     disconnect,
   } = useAgentEvents({
     url: 'wss://api.speraxos.io/agents/v1/stream',
-    apiKey: process.env.NEXT_PUBLIC_SPERAXOS_API_KEY,
-    autoConnect: true,
+    autoConnect: false, // Configure a private viewer session before connecting.
     reconnectDelay: 3000,
     maxReconnectAttempts: 10,
   });
@@ -354,3 +353,5 @@ function AgentDashboard() {
   );
 }
 ```
+
+For the current executor authorization, viewer-session and rollout requirements, see [executor security](../../docs/EXECUTOR-SECURITY.md). Do not expose upstream/control credentials in browser environment variables or URLs.
