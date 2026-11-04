@@ -12,3 +12,9 @@ packages/*/data/
 
 # Machine-specific compiler cache; never publish local paths or build logs.
 *.tsbuildinfo
+
+# Verified local browser cache and synthetic UI artifacts.
+.cache/
+test-results/
+__pycache__/
+*.pyc

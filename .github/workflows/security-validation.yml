@@ -9,6 +9,7 @@ jobs:
     env:
       NEXT_TELEMETRY_DISABLED: '1'
       TURBO_TELEMETRY_DISABLED: '1'
+      CHROME_DEVEL_SANDBOX: /usr/lib/fllc-ci/chrome-sandbox
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
@@ -19,8 +20,14 @@ jobs:
       - name: Preserve the complete audit and fail on critical or high findings
         run: npm audit --audit-level=high
       - run: npm run test:offline
+      - run: python3 tests/test_browser_installer.py
+      - run: python3 tests/install-secure-browser.py
+      - run: python3 tests/check-linux-sandbox.py
       - run: npm run typecheck
       - run: npm run build
       - run: npm run build --workspace @web3viz/playground
-      - name: Real lint across the source tree (existing debt remains blocking)
+      - run: npm run build --workspace @web3viz/executor
+      - run: git diff --exit-code -- packages/executor/dist
+      - run: npm run test:ui:offline
+      - name: Real lint across the source tree (zero warnings)
         run: npm run lint

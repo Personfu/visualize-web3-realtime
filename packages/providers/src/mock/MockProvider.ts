@@ -1,11 +1,11 @@
 import type {
-  DataProvider,
-  DataProviderEvent,
-  DataProviderStats,
-  ConnectionState,
-  CategoryConfig,
-  SourceConfig,
-  RawEvent,
+DataProvider,
+DataProviderEvent,
+DataProviderStats,
+ConnectionState,
+CategoryConfig,
+SourceConfig,
+RawEvent,
 } from '@web3viz/core';
 import { getCategoriesForSource } from '@web3viz/core';
 
@@ -269,7 +269,6 @@ export class MockProvider implements DataProvider {
         },
       });
     } else {
-      const token = randomEl(MOCK_TOKENS);
       const solAmount = Math.random() * 5;
       const wallet = randomEl(MOCK_WALLETS);
       this.totalClaims++;

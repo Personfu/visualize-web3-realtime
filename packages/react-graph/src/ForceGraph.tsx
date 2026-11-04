@@ -226,8 +226,9 @@ const Edges = memo<{ sim: ForceGraphSimulation }>(({ sim }) => {
 
     for (let i = 0; i < count; i++) {
       const edge = edges[i];
-      const src = edge.source as any;
-      const tgt = edge.target as any;
+      const src = edge.source;
+      const tgt = edge.target;
+      if (!src || typeof src !== 'object' || !tgt || typeof tgt !== 'object') continue;
       const idx = i * 6;
 
       pA.array[idx] = src.x ?? 0;

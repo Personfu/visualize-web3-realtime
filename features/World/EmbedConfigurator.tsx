@@ -1,6 +1,6 @@
 'use client';
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo,useCallback,useEffect,useMemo,useRef,useState } from 'react';
 
 // ============================================================================
 // Types
@@ -23,9 +23,6 @@ interface EmbedConfiguratorProps {
 
 const HEX_RE = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i;
 
-function isValidHex(v: string): boolean {
-  return HEX_RE.test(v.startsWith('#') ? v : `#${v}`);
-}
 
 function normalizeHex(v: string): string {
   const raw = v.startsWith('#') ? v : `#${v}`;

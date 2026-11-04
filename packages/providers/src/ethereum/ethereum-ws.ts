@@ -8,12 +8,11 @@
 
 import type { DataProviderEvent } from '@web3viz/core';
 import {
-  UNISWAP_V2_SWAP_TOPIC,
-  UNISWAP_V3_SWAP_TOPIC,
-  ERC20_TRANSFER_TOPIC,
-  MIN_TRANSFER_VALUE,
-  KNOWN_TOKENS,
-  WETH_ADDRESS,
+UNISWAP_V2_SWAP_TOPIC,
+UNISWAP_V3_SWAP_TOPIC,
+ERC20_TRANSFER_TOPIC,
+MIN_TRANSFER_VALUE,
+KNOWN_TOKENS
 } from './constants';
 
 // ---------------------------------------------------------------------------

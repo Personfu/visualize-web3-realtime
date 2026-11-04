@@ -29,8 +29,8 @@ Run these tasks sequentially in new Claude Code sessions. Each task builds on th
 ## Environment Variables (`.env.local`)
 ```
 # Solana
-NEXT_PUBLIC_SOLANA_WS_URL=wss://mainnet.helius-rpc.com/?api-key=8bf1013b-d8a1-4bcb-8485-0299f6b0d20e
-NEXT_PUBLIC_SOLANA_RPC_URL=https://mainnet.helius-rpc.com/?api-key=8bf1013b-d8a1-4bcb-8485-0299f6b0d20e
+NEXT_PUBLIC_SOLANA_WS_URL=wss://api.mainnet.solana.com
+NEXT_PUBLIC_SOLANA_RPC_URL=https://api.mainnet.solana.com
 
 # Ethereum
 NEXT_PUBLIC_ETH_WS_URL=wss://...

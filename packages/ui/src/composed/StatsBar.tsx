@@ -13,7 +13,7 @@ import { Button } from '../primitives/Button';
 export function useAnimatedValue(target: number, duration = 400): number {
   const [display, setDisplay] = useState(target);
   const prevRef = useRef(target);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const from = prevRef.current;
@@ -113,11 +113,13 @@ const AddressSearch = memo<{
   onDismiss?: () => void;
   onSearch: (address: string) => void;
 }>(({ onSearch, highlightedAddress, onDismiss }) => {
-  const [value, setValue] = useState('');
-
-  useEffect(() => {
+  const [value, setValue] = useState(highlightedAddress ?? '');
+  const [previousHighlight, setPreviousHighlight] = useState(highlightedAddress);
+  if (previousHighlight !== highlightedAddress) {
+    setPreviousHighlight(highlightedAddress);
     if (highlightedAddress) setValue(highlightedAddress);
-  }, [highlightedAddress]);
+  }
+
 
   const handleSubmit = useCallback(
     (e: React.FormEvent) => {

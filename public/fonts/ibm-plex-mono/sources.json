@@ -1,0 +1,39 @@
+{
+  "retrieved_at": "2026-11-04T15:58:05.020601+00:00",
+  "files": [
+    {
+      "file": "ibm-plex-mono-200.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3uAL8lc.ttf",
+      "bytes": 129228,
+      "sha256": "c89b900c7935908ff57703ac001e65767d8d07402ec773691ceed1a3943c49bd"
+    },
+    {
+      "file": "ibm-plex-mono-300.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3oQI8lc.ttf",
+      "bytes": 128456,
+      "sha256": "1d1488e07efe5c4619f40bb260d3e286e67c8c369c800fcd33f4eb83a6a63fdd"
+    },
+    {
+      "file": "ibm-plex-mono-400.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F63fjptAgt5VM-kVkqdyU8n5ig.ttf",
+      "bytes": 128812,
+      "sha256": "a7fdc993f9f0387caedba4e42521136fa97e4c0837ae6239bf0413ccf8af00c2"
+    },
+    {
+      "file": "ibm-plex-mono-500.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3twJ8lc.ttf",
+      "bytes": 129916,
+      "sha256": "4fc14a73ca53ba9d32fd759ae1ca1a3133326035d0dd337862b3ee1633cc156e"
+    },
+    {
+      "file": "ibm-plex-mono-600.ttf",
+      "source": "https://fonts.gstatic.com/s/ibmplexmono/v20/-F6qfjptAgt5VM-kVkqdyU8n3vAO8lc.ttf",
+      "bytes": 133444,
+      "sha256": "754dfc9d50cf7aabfb6b108d2c2f7d20a3f1f2cc6f6c01640c6728091272cec0"
+    }
+  ],
+  "license": {
+    "source": "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexmono/OFL.txt",
+    "sha256": "7e6b2818edbd8f6a01ae80641cc8f16a51080d08fb4e532be3a0b6f74adb07da"
+  }
+}

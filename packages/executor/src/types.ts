@@ -45,6 +45,10 @@ export interface HealthCheck {
 
 export interface ExecutorConfig {
   port: number;
+  host?: string;
+  accessToken: string;
+  viewerToken?: string;
+  allowedOrigins?: readonly string[];
   speraxosUrl: string;
   speraxosApiKey: string;
   maxAgents: number;

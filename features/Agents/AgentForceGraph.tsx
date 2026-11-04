@@ -13,32 +13,27 @@
  */
 'use client';
 
-import React, { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Canvas, useFrame, useThree } from '@react-three/fiber';
+import React,{ forwardRef,memo,useEffect,useImperativeHandle,useMemo,useRef,useState } from 'react';
+import { Canvas,useFrame,useThree } from '@react-three/fiber';
 import { MapControls } from '@react-three/drei';
 import type { MapControls as MapControlsImpl } from 'three-stdlib';
 import * as THREE from 'three';
 
 import type {
-  TopToken,
-  TraderEdge,
-  AgentFlowTrace,
-  ExecutorState,
-  AgentEvent,
-  AgentTask,
-  AgentToolCall,
+TopToken,
+TraderEdge,
+AgentFlowTrace,
+ExecutorState,
+AgentEvent
 } from '@web3viz/core';
 import type { ShareColors } from '../World/SharePanel';
 
 import { AgentLabel } from './AgentLabel';
-import { TaskInspectorPanel } from './TaskInspector';
 import {
-  AGENT_COLOR_PALETTE,
-  AGENT_COLORS,
-  AGENT_GRAPH_CONFIG,
-  TOOL_CLUSTER_POSITIONS,
-  TOOL_CLUSTER_ICONS,
-  TASK_STATUS_COLORS,
+AGENT_COLOR_PALETTE,
+AGENT_COLORS,
+AGENT_GRAPH_CONFIG,
+TOOL_CLUSTER_POSITIONS,TASK_STATUS_COLORS
 } from './constants';
 
 // ---------------------------------------------------------------------------
@@ -418,7 +413,7 @@ interface TaskNodesProps {
   selectedAgentId: string | null;
 }
 
-const TaskNodes = memo<TaskNodesProps>(({ tasks, selectedAgentId }) => {
+const TaskNodes = memo<TaskNodesProps>(({ tasks }) => {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const tempObj = useMemo(() => new THREE.Object3D(), []);
   const tempColor = useMemo(() => new THREE.Color(), []);
@@ -724,8 +719,6 @@ const ExecutorHeartbeat = memo<ExecutorHeartbeatProps>(({ executorState }) => {
     materialRef.current.emissive.set(getHealthColor());
   });
 
-  const uptime = executorState?.uptime || 0;
-  const uptimeStr = `${Math.floor(uptime / 3600000)}h${Math.floor((uptime % 3600000) / 60000)}m`;
 
   return (
     <group ref={groupRef} position={[0, -5, 0]}>
@@ -912,7 +905,6 @@ const AgentForceGraphInner = forwardRef<AgentForceGraphHandle, AgentForceGraphPr
   function AgentForceGraph(
     {
       agents,
-      toolEdges,
       flows,
       executorState,
       recentEvents,
@@ -937,9 +929,9 @@ const AgentForceGraphInner = forwardRef<AgentForceGraphHandle, AgentForceGraphPr
 
     // Update hubs from agents and flows
     useEffect(() => {
-      const newHubs: AgentHubState[] = agents.map((agent, i) => {
+      setHubs((previousHubs) => agents.map((agent, i) => {
         const flow = flows.get(agent.tokenAddress);
-        const existingHub = hubs.find((h) => h.id === agent.tokenAddress);
+        const existingHub = previousHubs.find((h) => h.id === agent.tokenAddress);
         const position = existingHub?.position || new THREE.Vector3(
           Math.cos(i / Math.max(agents.length, 1) * Math.PI * 2) * 15,
           0,
@@ -960,9 +952,7 @@ const AgentForceGraphInner = forwardRef<AgentForceGraphHandle, AgentForceGraphPr
           spawnedAt: existingHub?.spawnedAt || Date.now(),
           errorShakeStart: existingHub?.errorShakeStart,
         };
-      });
-
-      setHubs(newHubs);
+      }));
     }, [agents, flows]);
 
     // Update tasks from flows

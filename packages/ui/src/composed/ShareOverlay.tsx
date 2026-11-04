@@ -1,7 +1,7 @@
 'use client';
 
-import React, { forwardRef, memo, type CSSProperties } from 'react';
-import { fontFamily, fontSize, fontWeight } from '../tokens/typography';
+import { forwardRef,memo,type CSSProperties } from 'react';
+import { fontFamily,fontSize } from '../tokens/typography';
 
 // ============================================================================
 // ShareOverlay — metadata bars overlaid on canvas during share mode

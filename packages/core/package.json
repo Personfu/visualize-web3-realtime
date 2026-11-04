@@ -11,7 +11,8 @@
     "./types": "./src/types/index.ts",
     "./engine": "./src/engine/index.ts",
     "./categories": "./src/categories/index.ts",
-    "./providers": "./src/providers/index.ts"
+    "./providers": "./src/providers/index.ts",
+    "./transport": "./src/transport/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

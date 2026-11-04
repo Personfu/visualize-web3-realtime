@@ -1,4 +1,4 @@
-import type { AgentIdentity, AgentEvent } from './types.js';
+import type { AgentEvent } from './types.js';
 
 export type AgentStatus = 'idle' | 'running' | 'success' | 'error' | 'waiting' | 'cancelled';
 export type AgentOutputType = 'text' | 'tool_call' | 'tool_result';

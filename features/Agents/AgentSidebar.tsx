@@ -1,7 +1,7 @@
 'use client';
 
-import { memo, useState } from 'react';
-import type { AgentIdentity, ExecutorState } from '@web3viz/core';
+import { memo } from 'react';
+import type { AgentIdentity,ExecutorState } from '@web3viz/core';
 import { TOOL_CLUSTER_ICONS } from './constants';
 import { agentThemeTokens } from '@/packages/ui/src/tokens/agent-colors';
 
@@ -24,7 +24,7 @@ export interface AgentSidebarProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getAgentStatus(_agent: AgentIdentity): 'active' | 'idle' | 'error' {
+function getAgentStatus(): 'active' | 'idle' | 'error' {
   // Default to idle — actual status tracked externally via flow data
   return 'idle';
 }
@@ -64,7 +64,7 @@ const AgentItem = memo<{
   onClick: () => void;
   onKeyDown?: (e: React.KeyboardEvent) => void;
 }>(({ agent, isActive, collapsed, colorScheme, onClick, onKeyDown }) => {
-  const status = getAgentStatus(agent);
+  const status = getAgentStatus();
   const color = getStatusColor(status);
   const tokens = agentThemeTokens[colorScheme ?? 'dark'];
 
@@ -79,7 +79,7 @@ const AgentItem = memo<{
         onKeyDown?.(e);
       }}
       tabIndex={0}
-      aria-selected={isActive}
+      aria-pressed={isActive}
       role="button"
       style={{
         display: 'flex',

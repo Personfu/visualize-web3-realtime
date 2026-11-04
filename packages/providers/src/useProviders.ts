@@ -27,6 +27,8 @@ export interface UseProvidersOptions {
   maxEvents?: number;
   /** Start with all providers enabled? Default true for backward compat. */
   startEnabled?: boolean;
+  /** Explicit initial opt-in provider IDs, for example a shared viewer URL. */
+  initialEnabledProviderIds?: readonly string[];
 }
 
 export interface UseProvidersReturn {
@@ -68,31 +70,29 @@ const DEFAULT_MAX_EVENTS = 300;
 // ============================================================================
 
 export function useProviders(options: UseProvidersOptions): UseProvidersReturn {
-  const { providers, paused = false, maxEvents = DEFAULT_MAX_EVENTS, startEnabled = true } = options;
+  const { providers, paused = false, maxEvents = DEFAULT_MAX_EVENTS, startEnabled = true, initialEnabledProviderIds } = options;
 
   // Mutable refs for event buffering (avoids re-render loops)
   const eventBufferRef = useRef<DataProviderEvent[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const providersRef = useRef(providers);
-  providersRef.current = providers;
   const maxEventsRef = useRef(maxEvents);
-  maxEventsRef.current = maxEvents;
+  useEffect(() => { maxEventsRef.current = maxEvents; }, [maxEvents]);
 
   // State
   const [allEvents, setAllEvents] = useState<DataProviderEvent[]>([]);
-  const [eventFlushCount, setEventFlushCount] = useState(0);
 
   const [enabledCategories, setEnabledCategories] = useState<Set<string>>(() => {
-    if (!startEnabled) return new Set<string>();
     const all = new Set<string>();
     for (const p of providers) {
-      for (const cat of p.categories) all.add(cat.id);
+      if (initialEnabledProviderIds ? initialEnabledProviderIds.includes(p.id) : startEnabled) {
+        for (const cat of p.categories) all.add(cat.id);
+      }
     }
     return all;
   });
 
   const [enabledProviders, setEnabledProviders] = useState<Set<string>>(
-    () => startEnabled ? new Set(providers.map((p) => p.id)) : new Set<string>(),
+    () => new Set(providers.filter(p => initialEnabledProviderIds ? initialEnabledProviderIds.includes(p.id) : startEnabled).map(p => p.id)),
   );
 
   // Flush buffered events into state
@@ -107,8 +107,6 @@ export function useProviders(options: UseProvidersOptions): UseProvidersReturn {
       return merged.slice(0, maxEventsRef.current);
     });
 
-    // Trigger stats re-derivation
-    setEventFlushCount((c) => c + 1);
   }, []);
 
   // Schedule a debounced flush (100ms batching)
@@ -120,53 +118,54 @@ export function useProviders(options: UseProvidersOptions): UseProvidersReturn {
     }, FLUSH_INTERVAL_MS);
   }, [flush]);
 
-  // Track which providers are currently connected
-  const connectedRef = useRef<Set<string>>(new Set());
-  const unsubMapRef = useRef<Map<string, () => void>>(new Map());
-
-  // Connect/disconnect providers based on enabledProviders
+  // Keep the subscribed provider instance with its disposer. Replacing or removing
+  // a provider must release the previous instance, even when its ID is reused.
+  const managedRef = useRef(new Map<string, { provider: DataProvider; unsubscribe: () => void }>());
   useEffect(() => {
-    for (const provider of providers) {
-      const isEnabled = enabledProviders.has(provider.id);
-      const isConnected = connectedRef.current.has(provider.id);
-
-      if (isEnabled && !isConnected) {
-        provider.connect();
-        connectedRef.current.add(provider.id);
-        const unsub = provider.onEvent((event) => {
-          eventBufferRef.current.push(event);
-          scheduleFlush();
-        });
-        unsubMapRef.current.set(provider.id, unsub);
-      } else if (!isEnabled && isConnected) {
-        unsubMapRef.current.get(provider.id)?.();
-        unsubMapRef.current.delete(provider.id);
-        provider.disconnect();
-        connectedRef.current.delete(provider.id);
+    const managed = managedRef.current;
+    for (const [id, connection] of managed) {
+      if (!enabledProviders.has(id) || !providers.includes(connection.provider)) {
+        connection.unsubscribe();
+        connection.provider.disconnect();
+        managed.delete(id);
       }
     }
-  }, [providers, enabledProviders, scheduleFlush]);
+    for (const provider of providers) {
+      const enabled = enabledProviders.has(provider.id);
+      provider.setEnabled(enabled);
+      provider.setPaused(paused);
+      if (!enabled || managed.has(provider.id)) continue;
+      // Subscribe first: providers can emit their first event during connect().
+      const unsubscribe = provider.onEvent(event => {
+        eventBufferRef.current.push(event);
+        scheduleFlush();
+      });
+      managed.set(provider.id, { provider, unsubscribe });
+      try {
+        provider.connect();
+      } catch (error) {
+        unsubscribe();
+        managed.delete(provider.id);
+        provider.disconnect();
+        throw error;
+      }
+    }
+  }, [providers, enabledProviders, paused, scheduleFlush]);
 
-  // Cleanup on unmount
   useEffect(() => {
+    const managed = managedRef.current;
     return () => {
-      for (const unsub of unsubMapRef.current.values()) unsub();
-      unsubMapRef.current.clear();
-      for (const provider of providersRef.current) provider.disconnect();
-      connectedRef.current.clear();
+      for (const connection of managed.values()) {
+        connection.unsubscribe();
+        connection.provider.disconnect();
+      }
+      managed.clear();
       if (flushTimerRef.current) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
     };
   }, []);
-
-  // Pause/resume
-  useEffect(() => {
-    for (const provider of providers) {
-      provider.setPaused(paused);
-    }
-  }, [providers, paused]);
 
   // Toggle category
   const toggleCategory = useCallback((categoryId: string) => {
@@ -178,29 +177,20 @@ export function useProviders(options: UseProvidersOptions): UseProvidersReturn {
     });
   }, []);
 
-  // Toggle provider — also enable its categories when turning on
+  // Event handlers update selection; the effect owns provider side effects.
   const toggleProvider = useCallback((providerId: string) => {
-    setEnabledProviders((prev) => {
-      const next = new Set(prev);
-      if (next.has(providerId)) {
-        next.delete(providerId);
-        providersRef.current.find((p) => p.id === providerId)?.setEnabled(false);
-      } else {
-        next.add(providerId);
-        const provider = providersRef.current.find((p) => p.id === providerId);
-        provider?.setEnabled(true);
-        // Auto-enable this provider's categories
-        if (provider) {
-          setEnabledCategories((prevCats) => {
-            const nextCats = new Set(prevCats);
-            for (const cat of provider.categories) nextCats.add(cat.id);
-            return nextCats;
-          });
-        }
-      }
+    const enabling = !enabledProviders.has(providerId);
+    setEnabledProviders(previous => {
+      const next = new Set(previous);
+      if (next.has(providerId)) next.delete(providerId);
+      else next.add(providerId);
       return next;
     });
-  }, []);
+    const provider = providers.find(p => p.id === providerId);
+    if (enabling && provider) {
+      setEnabledCategories(previous => new Set([...previous, ...provider.categories.map(category => category.id)]));
+    }
+  }, [providers, enabledProviders]);
 
   // Collect categories from all enabled providers (deduplicated)
   const categories = useMemo(() => {
@@ -293,7 +283,7 @@ export function useProviders(options: UseProvidersOptions): UseProvidersReturn {
       rawEvents: allRawEvents,
       bySource,
     };
-  }, [providers, enabledProviders, allEvents, eventFlushCount]);
+  }, [providers, enabledProviders, allEvents]);
 
   // Filter events by enabled categories and providers
   const filteredEvents = useMemo(
@@ -306,16 +296,12 @@ export function useProviders(options: UseProvidersOptions): UseProvidersReturn {
     [allEvents, enabledCategories, enabledProviders],
   );
 
-  // Derive connections from enabled providers
-  const connections = useMemo(() => {
-    const conns: Record<string, ConnectionState[]> = {};
-    for (const p of providers) {
-      if (enabledProviders.has(p.id)) {
-        conns[p.id] = p.getConnections();
-      }
-    }
-    return conns;
-  }, [providers, enabledProviders, eventFlushCount]);
+  // Provider getters expose external connection state; event flushes already
+  // update allEvents and trigger a render, so no dummy counter is necessary.
+  const connections: Record<string, ConnectionState[]> = {};
+  for (const provider of providers) {
+    if (enabledProviders.has(provider.id)) connections[provider.id] = provider.getConnections();
+  }
 
   return {
     stats,

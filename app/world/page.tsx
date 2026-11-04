@@ -1,15 +1,16 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo,Suspense,useCallback,useEffect,useMemo,useRef,useState } from 'react';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import InfoPopover from '@/features/World/InfoPopover';
 import JourneyOverlay from '@/features/World/JourneyOverlay';
 import LoadingScreen from '@/features/World/LoadingScreen';
 import ProtocolFilterSidebar from '@/features/World/ProtocolFilterSidebar';
 import ShareOverlay from '@/features/World/ShareOverlay';
-import SharePanel, { type ShareColors } from '@/features/World/SharePanel';
+import SharePanel,{ type ShareColors } from '@/features/World/SharePanel';
 import { useProviders } from '@web3viz/providers';
 import { providers } from './providers';
 import LiveFeed from '@/features/World/LiveFeed';
@@ -19,28 +20,23 @@ import StatsBar from '@/features/World/StatsBar';
 import { useJourney } from '@/features/World/useJourney';
 import EmbedConfigurator from '@/features/World/EmbedConfigurator';
 import ProviderPanel from '@/features/World/ProviderPanel';
-import { captureCanvas, captureSnapshot, downloadBlob, timestampedFilename } from '@/features/World/utils/screenshot';
-import { buildShareUrl, buildShareText, parseShareParams, shareOnX, shareOnLinkedIn } from '@/features/World/utils/shareUrl';
+import { captureCanvas,captureSnapshot,downloadBlob,timestampedFilename } from '@/features/World/utils/screenshot';
+import { buildShareUrl,buildShareText,parseShareParams,shareOnX,shareOnLinkedIn } from '@/features/World/utils/shareUrl';
 import type { ForceGraphHandle } from '@/features/World/ForceGraph';
 import { WorldChat } from '@/features/World/ai/WorldChat';
 
 // Lazy-load the 3D force graph to avoid SSR issues with Three.js
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const ForceGraph = dynamic(() => import('@/features/World/ForceGraph'), {
   ssr: false,
   loading: () => <div style={{ width: '100%', height: '100%', background: '#ffffff' }} />,
-}) as any;
+});
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatStat(value: number, prefix = ''): string {
-  if (value >= 1_000_000_000) return `${prefix}${(value / 1_000_000_000).toFixed(1)}B`;
-  if (value >= 1_000_000) return `${prefix}${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1000) return `${prefix}${(value / 1000).toFixed(1)}K`;
-  return `${prefix}${value.toFixed(value < 10 ? 2 : 0)}`;
-}
+
 
 // Compute total volume across all chains
 function getTotalVolume(volumeMap: Record<string, number>): number {
@@ -205,8 +201,10 @@ FadeIn.displayName = 'FadeIn';
 // Page
 // ---------------------------------------------------------------------------
 
-export default function WorldPage() {
-  const [isPlaying, setIsPlaying] = useState(false);
+function WorldPageInner() {
+  const searchParams = useSearchParams();
+  const initialColors = parseShareParams(searchParams.toString()).colors;
+  const [isPlaying, setIsPlaying] = useState(searchParams.get('agents') === 'true');
   const [timeFilter, setTimeFilter] = useState<number | null>(null);
   const isLive = timeFilter === null;
   const [infoOpen, setInfoOpen] = useState(false);
@@ -214,16 +212,17 @@ export default function WorldPage() {
   const [canvasReady, setCanvasReady] = useState(false);
   const [highlightedAddress, setHighlightedAddress] = useState<string | null>(null);
   const [highlightedHubIndex, setHighlightedHubIndex] = useState<number | null>(null);
-  const [activeHubMint, setActiveHubMint] = useState<string | null>(null);
+  const [activeHubMint, setActiveHubMint] = useState<string | null>(() => searchParams.get('protocols'));
   const [searchToast, setSearchToast] = useState<string | null>(null);
   const [searchError, setSearchError] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(() => Object.keys(initialColors).length > 0);
   const [embedOpen, setEmbedOpen] = useState(false);
   const [providerPanelOpen, setProviderPanelOpen] = useState(false);
   const [shareColors, setShareColors] = useState<ShareColors>({
     background: '#ffffff',
     protocol: '#1a1a1a',
     user: '#1a1a1a',
+    ...initialColors,
   });
   const infoButtonRef = useRef<HTMLButtonElement>(null);
   const graphRef = useRef<ForceGraphHandle>(null);
@@ -232,9 +231,9 @@ export default function WorldPage() {
 
   const {
     stats, filteredEvents, allEvents, enabledCategories, toggleCategory,
-    enabledProviders, toggleProvider: rawToggleProvider, categories, sources, connections,
+    enabledProviders, toggleProvider: rawToggleProvider, categories, connections,
     allCategories, allSources
-  } = useProviders({ providers, paused: !isPlaying, startEnabled: false });
+  } = useProviders({ providers, paused: !isPlaying, startEnabled: false, initialEnabledProviderIds: searchParams.get('agents') === 'true' ? ['agents'] : [] });
 
   // Auto-play when first provider is enabled + sync agents toggle to URL
   const toggleProvider = useCallback((providerId: string) => {
@@ -258,32 +257,19 @@ export default function WorldPage() {
 
   const hasActiveProvider = enabledProviders.size > 0;
 
-  // Mark canvas ready once first data arrives
-  useEffect(() => {
-    if (!canvasReady && stats.topTokens.length > 0) {
-      setCanvasReady(true);
-    }
-  }, [canvasReady, stats.topTokens.length]);
+  if (!canvasReady && stats.topTokens.length > 0) setCanvasReady(true);
 
-  // -- Timeline timestamp accumulation --
-  const [timelineTimestamps, setTimelineTimestamps] = useState<number[]>([]);
-  const seenEventIdsRef = useRef(new Set<string>());
-
-  useEffect(() => {
-    const newTs: number[] = [];
-    for (const evt of allEvents) {
-      if (!seenEventIdsRef.current.has(evt.id)) {
-        seenEventIdsRef.current.add(evt.id);
-        newTs.push(evt.timestamp);
-      }
+  // Retain a bounded unique event timeline; previous input identity prevents
+  // repeated accumulation during unrelated renders.
+  const [timeline, setTimeline] = useState<{ input: typeof allEvents; entries: { id: string; timestamp: number }[] }>(() => ({ input: allEvents, entries: allEvents.map(event => ({ id: event.id, timestamp: event.timestamp })) }));
+  if (timeline.input !== allEvents) {
+    const unique = new Map(timeline.entries.map(event => [event.id, event]));
+    for (const event of allEvents) {
+      if (!unique.has(event.id)) unique.set(event.id, { id: event.id, timestamp: event.timestamp });
     }
-    if (newTs.length > 0) {
-      setTimelineTimestamps((prev) => {
-        const next = [...prev, ...newTs];
-        return next.length > 5000 ? next.slice(-5000) : next;
-      });
-    }
-  }, [allEvents]);
+    setTimeline({ input: allEvents, entries: [...unique.values()].slice(-5000) });
+  }
+  const timelineTimestamps = timeline.entries.map(event => event.timestamp);
 
   // -- Time range for auto-advance --
   const timeRange = useMemo(() => {
@@ -298,7 +284,7 @@ export default function WorldPage() {
   }, [timelineTimestamps]);
 
   const timeRangeRef = useRef(timeRange);
-  timeRangeRef.current = timeRange;
+  useEffect(() => { timeRangeRef.current = timeRange; }, [timeRange]);
 
   // -- Playback auto-advance --
   useEffect(() => {
@@ -352,38 +338,6 @@ export default function WorldPage() {
     if (timeFilter === null) return filteredEvents;
     return filteredEvents.filter((e) => e.timestamp <= timeFilter);
   }, [filteredEvents, timeFilter]);
-
-  // Protocol filter sidebar: toggle highlight by mint (single select)
-  const handleProtocolToggle = useCallback((mint: string) => {
-    setActiveHubMint((prev) => {
-      const next = prev === mint ? null : mint;
-      // Sync to URL
-      const url = new URL(window.location.href);
-      if (next) {
-        url.searchParams.set('protocols', next);
-      } else {
-        url.searchParams.delete('protocols');
-      }
-      window.history.replaceState({}, '', url.toString());
-      return next;
-    });
-  }, []);
-
-  // Read ?protocols= and ?agents= params on mount to restore filter and agent toggle
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const proto = params.get('protocols');
-    if (proto) {
-      setActiveHubMint(proto);
-    }
-    const agentsParam = params.get('agents');
-    if (agentsParam === 'true') {
-      // toggleProvider only when agents should be enabled
-      if (!enabledProviders.has('agents')) {
-        toggleProvider('agents');
-      }
-    }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Search for an address in recent events and highlight the corresponding hub
   const handleAddressSearch = useCallback((address: string) => {
@@ -507,15 +461,6 @@ export default function WorldPage() {
     const url = buildShareUrl(shareColors, userAddress || undefined);
     shareOnLinkedIn(url);
   }, [shareColors, userAddress]);
-
-  // --- Parse share URL color params on mount ---
-  useEffect(() => {
-    const { colors } = parseShareParams(window.location.search);
-    if (colors.background || colors.protocol || colors.user) {
-      setShareColors((prev) => ({ ...prev, ...colors }));
-      setShareOpen(true);
-    }
-  }, []);
 
   const { isComplete, isRunning, overlay, skipJourney, startJourney } = useJourney({
     enabledCategories,
@@ -891,4 +836,8 @@ export default function WorldPage() {
       </button>
     </div>
   );
+}
+
+export default function WorldPage() {
+  return <Suspense fallback={null}><WorldPageInner /></Suspense>;
 }

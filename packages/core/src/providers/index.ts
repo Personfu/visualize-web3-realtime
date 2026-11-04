@@ -7,8 +7,8 @@
 // protocol, or API — then register it so it appears in the visualization.
 // ============================================================================
 
-import type { DataProviderEvent, DataProviderStats, TopToken, TraderEdge, RawEvent } from '../types';
-import type { CategoryConfig, SourceConfig } from '../categories';
+import type { DataProviderEvent,DataProviderStats,RawEvent } from '../types';
+import type { CategoryConfig,SourceConfig } from '../categories';
 
 // ---------------------------------------------------------------------------
 // Provider interface

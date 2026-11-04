@@ -2,13 +2,13 @@
 
 import { useMemo } from 'react';
 import type {
-  AgentIdentity,
-  AgentFlowTrace,
-  ExecutorState,
-  DataProviderStats,
-  DataProviderEvent,
-  TopToken,
-  TraderEdge,
+AgentIdentity,
+AgentFlowTrace,
+ExecutorState,
+DataProviderStats,
+DataProviderEvent,
+TopToken,
+TraderEdge,
 } from '@web3viz/core';
 import type { AgentAggregateStats } from './useAgentEvents';
 import { useAgentEvents } from './useAgentEvents';
@@ -47,16 +47,9 @@ interface UseAgentProviderReturn {
 // Helpers: map agent data → DataProvider concepts
 // ---------------------------------------------------------------------------
 
-function agentColor(index: number): string {
-  const palette = [
-    '#c084fc', '#60a5fa', '#f472b6', '#34d399',
-    '#fbbf24', '#fb923c', '#a78bfa', '#22d3ee',
-  ];
-  return palette[index % palette.length];
-}
 
 function agentsToTopTokens(agents: Map<string, AgentIdentity>, flows: Map<string, AgentFlowTrace>): TopToken[] {
-  return Array.from(agents.values()).map((agent, idx) => {
+  return Array.from(agents.values()).map((agent) => {
     const flow = flows.get(agent.agentId);
     const toolCalls = flow?.totalToolCalls ?? 0;
     const tasksCompleted = flow?.totalTasksCompleted ?? 0;

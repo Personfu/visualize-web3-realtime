@@ -1,9 +1,8 @@
 'use client';
 
-import React, { memo, useCallback, useEffect, useRef, type CSSProperties } from 'react';
+import { memo,useCallback,useEffect,useRef,type CSSProperties } from 'react';
 import type { ShareColors } from '@web3viz/core';
-import { fontFamily, fontSize } from '../tokens/typography';
-import { borderRadius, shadows } from '../tokens/spacing';
+import { fontFamily,fontSize } from '../tokens/typography';
 import { swatches } from '../tokens/colors';
 import { ColorControl } from '../primitives/ColorControl';
 import { Button } from '../primitives/Button';

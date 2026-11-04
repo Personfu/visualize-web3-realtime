@@ -72,8 +72,8 @@ export class StateStore {
       `);
             stmt.run(agent.agentId, agent.name, agent.role, 'idle', agent.address ?? null, agent.parentAgentId ?? null, agent.createdAt, Date.now());
         }
-        catch (err) {
-            console.error('[StateStore] Failed to save agent:', err);
+        catch {
+            console.error('[StateStore] Failed to save agent:');
         }
     }
     saveTask(task) {
@@ -84,8 +84,8 @@ export class StateStore {
       `);
             stmt.run(task.taskId, task.agentId, task.description, task.status, task.priority ?? 5, task.createdAt, task.startedAt ?? null, task.endedAt ?? null, task.result ?? null, task.error ?? null);
         }
-        catch (err) {
-            console.error('[StateStore] Failed to save task:', err);
+        catch {
+            console.error('[StateStore] Failed to save task:');
         }
     }
     saveEvent(event) {
@@ -96,8 +96,8 @@ export class StateStore {
       `);
             stmt.run(`evt_${event.eventId}`, event.eventId, event.type, event.agentId, event.taskId ?? null, event.timestamp, JSON.stringify(event.payload));
         }
-        catch (err) {
-            console.error('[StateStore] Failed to save event:', err);
+        catch {
+            console.error('[StateStore] Failed to save event:');
         }
     }
     loadActiveAgents() {
@@ -118,8 +118,8 @@ export class StateStore {
                 createdAt: row.created_at,
             }));
         }
-        catch (err) {
-            console.error('[StateStore] Failed to load active agents:', err);
+        catch {
+            console.error('[StateStore] Failed to load active agents:');
             return [];
         }
     }
@@ -145,8 +145,8 @@ export class StateStore {
                 error: row.error || undefined,
             }));
         }
-        catch (err) {
-            console.error('[StateStore] Failed to load active tasks:', err);
+        catch {
+            console.error('[StateStore] Failed to load active tasks:');
             return [];
         }
     }
@@ -168,23 +168,21 @@ export class StateStore {
                 payload: JSON.parse(row.payload),
             }));
         }
-        catch (err) {
-            console.error('[StateStore] Failed to load recent events:', err);
+        catch {
+            console.error('[StateStore] Failed to load recent events:');
             return [];
         }
     }
     getStats() {
         try {
-            const taskCount = this.db.prepare('SELECT COUNT(*) as count FROM tasks').get()
-                .count;
-            const eventCount = this.db.prepare('SELECT COUNT(*) as count FROM events').get()
-                .count;
+            const taskCount = this.db.prepare('SELECT COUNT(*) as count FROM tasks').get()?.count ?? 0;
+            const eventCount = this.db.prepare('SELECT COUNT(*) as count FROM events').get()?.count ?? 0;
             const startTime = this.getMeta('start_time');
             const uptime = startTime ? Date.now() - parseInt(startTime, 10) : 0;
             return { totalTasks: taskCount, totalEvents: eventCount, uptime };
         }
-        catch (err) {
-            console.error('[StateStore] Failed to get stats:', err);
+        catch {
+            console.error('[StateStore] Failed to get stats:');
             return { totalTasks: 0, totalEvents: 0, uptime: 0 };
         }
     }
@@ -193,8 +191,8 @@ export class StateStore {
             const stmt = this.db.prepare('INSERT OR REPLACE INTO executor_meta (key, value) VALUES (?, ?)');
             stmt.run(key, value);
         }
-        catch (err) {
-            console.error('[StateStore] Failed to set meta:', err);
+        catch {
+            console.error('[StateStore] Failed to set meta:');
         }
     }
     getMeta(key) {
@@ -203,8 +201,8 @@ export class StateStore {
             const row = stmt.get(key);
             return row ? row.value : null;
         }
-        catch (err) {
-            console.error('[StateStore] Failed to get meta:', err);
+        catch {
+            console.error('[StateStore] Failed to get meta:');
             return null;
         }
     }
@@ -212,8 +210,8 @@ export class StateStore {
         try {
             this.db.close();
         }
-        catch (err) {
-            console.error('[StateStore] Failed to close database:', err);
+        catch {
+            console.error('[StateStore] Failed to close database:');
         }
     }
 }

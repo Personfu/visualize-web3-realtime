@@ -234,8 +234,6 @@ export class EvmWebSocket {
       const volume1 = Math.abs(Number(amount1) / 1e18);
       volume = Math.max(volume0, volume1);
     } else {
-      const amount0In = BigInt('0x' + cleanData.slice(0, 64));
-      const amount1In = BigInt('0x' + cleanData.slice(64, 128));
       const amount0Out = BigInt('0x' + cleanData.slice(128, 192));
       const amount1Out = BigInt('0x' + cleanData.slice(192, 256));
       const volume0 = Number(amount0Out) / 1e18;

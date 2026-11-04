@@ -39,7 +39,6 @@ export class SpatialHash {
   /** Query all items within radius of a point */
   query(x: number, y: number, z: number, radius: number): number[] {
     const result: number[] = [];
-    const r2 = radius * radius;
     const minCx = Math.floor((x - radius) / this.cellSize);
     const maxCx = Math.floor((x + radius) / this.cellSize);
     const minCy = Math.floor((y - radius) / this.cellSize);

@@ -1,12 +1,8 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { AgentEvent, AgentIdentity, AgentFlowTrace } from '@web3viz/core';
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import type { AgentEvent, AgentIdentity, AgentFlowTrace, AgentToolCall } from '@web3viz/core';
 import type { AgentAggregateStats, UseAgentEventsReturn } from './useAgentEvents';
-
-// ---------------------------------------------------------------------------
-// Mock data constants
-// ---------------------------------------------------------------------------
 
 const AGENT_PROFILES: Array<{ name: string; role: string }> = [
   { name: 'CodeReviewer', role: 'coder' },
@@ -29,7 +25,7 @@ const TASK_DESCRIPTIONS = [
   'Write technical specification',
 ];
 
-const TOOL_CALLS: Array<{ toolName: string; toolCategory: string; inputSummary: string }> = [
+const TOOL_CALLS: Array<{ toolName: string; toolCategory: AgentToolCall['toolCategory']; inputSummary: string }> = [
   { toolName: 'read_file', toolCategory: 'filesystem', inputSummary: 'Reading src/index.ts' },
   { toolName: 'grep_search', toolCategory: 'search', inputSummary: 'Searching for "handleSubmit"' },
   { toolName: 'run_in_terminal', toolCategory: 'terminal', inputSummary: 'npx tsc --noEmit' },
@@ -77,78 +73,129 @@ function emptyFlow(agent: AgentIdentity): AgentFlowTrace {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Options
-// ---------------------------------------------------------------------------
-
 export interface UseMockAgentEventsOptions {
   agentCount?: number;
   eventsPerSecond?: number;
   autoStart?: boolean;
 }
 
-// ---------------------------------------------------------------------------
-// Hook
-// ---------------------------------------------------------------------------
+type Snapshot = Omit<UseAgentEventsReturn, 'connect' | 'disconnect' | 'setPaused'>;
+const emptyStats = (): AgentAggregateStats => ({
+  totalAgents: 0, activeTasks: 0, totalToolCalls: 0,
+  totalTasksCompleted: 0, totalTasksFailed: 0, toolCallsPerMinute: 0,
+});
+const emptySnapshot = (): Snapshot => ({
+  connected: false, paused: false, executorState: null,
+  agents: new Map(), flows: new Map(), recentEvents: [], stats: emptyStats(),
+});
 
-export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): UseAgentEventsReturn {
-  const { agentCount = 3, eventsPerSecond = 2, autoStart = true } = options;
+/** Offline clock-driven demo. It never calls a tool, RPC, or agent service. */
+export class MockAgentStore {
+  private connected = false;
+  private paused = false;
+  private agents = new Map<string, AgentIdentity>();
+  private flows = new Map<string, AgentFlowTrace>();
+  private phases = new Map<string, { phase: string; taskId: string | null; callCount: number; taskCount: number }>();
+  private toolCallTimestamps: number[] = [];
+  private recentEvents: AgentEvent[] = [];
+  private totalFailed = 0;
+  private interval: ReturnType<typeof setInterval> | null = null;
+  private timers = new Set<ReturnType<typeof setTimeout>>();
+  private deferred: Array<() => void> = [];
+  private listeners = new Set<() => void>();
+  private snapshot = emptySnapshot();
+  private readonly serverSnapshot = emptySnapshot();
 
-  const [connected, setConnected] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const [agents, setAgents] = useState<Map<string, AgentIdentity>>(() => new Map());
-  const [flows, setFlows] = useState<Map<string, AgentFlowTrace>>(() => new Map());
-  const [recentEvents, setRecentEvents] = useState<AgentEvent[]>([]);
-  const [stats, setStats] = useState<AgentAggregateStats>({
-    totalAgents: 0,
-    activeTasks: 0,
-    totalToolCalls: 0,
-    totalTasksCompleted: 0,
-    totalTasksFailed: 0,
-    toolCallsPerMinute: 0,
-  });
-  const [executorState] = useState(null);
+  constructor(private readonly agentCount: number, private readonly eventsPerSecond: number) {
+    if (!Number.isInteger(agentCount) || agentCount < 1 || agentCount > AGENT_PROFILES.length ||
+        !Number.isFinite(eventsPerSecond) || eventsPerSecond <= 0 || eventsPerSecond > 60) {
+      throw new Error('Invalid offline demo configuration');
+    }
+  }
 
-  const pausedRef = useRef(paused);
-  const agentsRef = useRef<Map<string, AgentIdentity>>(new Map());
-  const flowsRef = useRef<Map<string, AgentFlowTrace>>(new Map());
-  const toolCallTimestampsRef = useRef<number[]>([]);
+  subscribe = (listener: () => void) => {
+    this.listeners.add(listener);
+    return () => { this.listeners.delete(listener); };
+  };
+  getSnapshot = () => this.snapshot;
+  getServerSnapshot = () => this.serverSnapshot;
 
-  pausedRef.current = paused;
-
-  // Agent state machine per agent: what phase are they in
-  const agentPhaseRef = useRef<Map<string, { phase: string; taskId: string | null; callCount: number; taskCount: number }>>( new Map());
-
-  // --- Emit an event ---
-  const emit = useCallback((event: AgentEvent) => {
-    if (pausedRef.current) return;
-
-    setRecentEvents((prev) => {
-      const next = [event, ...prev];
-      return next.length > 500 ? next.slice(0, 500) : next;
+  private publish() {
+    const cutoff = Date.now() - 60_000;
+    this.toolCallTimestamps = this.toolCallTimestamps.filter(t => t > cutoff);
+    const stats = emptyStats();
+    stats.totalAgents = this.agents.size;
+    stats.activeTasks = [...this.phases.values()].filter(p => p.phase === 'in-task').length;
+    stats.totalTasksFailed = this.totalFailed;
+    stats.toolCallsPerMinute = this.toolCallTimestamps.length;
+    for (const flow of this.flows.values()) {
+      stats.totalToolCalls += flow.totalToolCalls;
+      stats.totalTasksCompleted += flow.totalTasksCompleted;
+    }
+    // Published snapshots cannot change underneath React's concurrent readers.
+    this.snapshot = structuredClone({
+      connected: this.connected, paused: this.paused, executorState: null,
+      agents: this.agents, flows: this.flows, recentEvents: this.recentEvents, stats,
     });
+    for (const listener of this.listeners) listener();
+  }
 
-    // Update flows state
-    setFlows((prev) => {
-      const next = new Map(prev);
-      let flow = next.get(event.agentId);
-      if (!flow) return prev;
+  private later(fn: () => void, delay: number) {
+    const timer = setTimeout(() => {
+      this.timers.delete(timer);
+      if (!this.connected) return;
+      if (this.paused) this.deferred.push(fn);
+      else fn();
+    }, delay);
+    this.timers.add(timer);
+  }
 
-      flow = { ...flow, events: [...flow.events, event] };
-      next.set(event.agentId, flow);
-      return next;
-    });
-  }, []);
+  private emit(event: AgentEvent) {
+    if (!this.connected || this.paused) return;
+    this.recentEvents = [event, ...this.recentEvents].slice(0, 500);
+    const flow = this.flows.get(event.agentId);
+    if (!flow) return;
+    flow.events = [...flow.events, event].slice(-500);
+    if (event.type === 'task:started' && event.taskId) {
+      flow.tasks = [...flow.tasks, {
+        taskId: event.taskId, agentId: event.agentId,
+        description: String(event.payload.description ?? ''),
+        status: 'in-progress' as const, createdAt: event.timestamp, startedAt: event.timestamp,
+      }].slice(-500);
+    } else if (event.type === 'task:completed' || event.type === 'task:failed') {
+      flow.tasks = flow.tasks.map(task => task.taskId === event.taskId ? {
+        ...task, status: event.type === 'task:completed' ? 'completed' : 'failed', endedAt: event.timestamp,
+      } : task);
+      if (event.type === 'task:completed') flow.totalTasksCompleted++;
+      else this.totalFailed++;
+    } else if (event.type === 'tool:started' && event.callId && event.taskId) {
+      const category = TOOL_CALLS.find(tool => tool.toolName === event.payload.toolName)?.toolCategory ?? 'other';
+      flow.toolCalls = [...flow.toolCalls, {
+        callId: event.callId, taskId: event.taskId, agentId: event.agentId,
+        toolName: String(event.payload.toolName ?? ''), toolCategory: category,
+        inputSummary: String(event.payload.inputSummary ?? ''), status: 'started' as const, startedAt: event.timestamp,
+      }].slice(-500);
+      flow.totalToolCalls++;
+    } else if (event.type === 'tool:completed' || event.type === 'tool:failed') {
+      flow.toolCalls = flow.toolCalls.map(call => call.callId === event.callId ? {
+        ...call, status: event.type === 'tool:completed' ? 'completed' : 'failed',
+        endedAt: event.timestamp, duration: event.timestamp - call.startedAt,
+        outputSummary: String(event.payload.outputSummary ?? ''),
+      } : call);
+    } else if (event.type === 'subagent:spawn' && typeof event.payload.subAgentId === 'string') {
+      const child = this.agents.get(event.payload.subAgentId);
+      if (child) flow.subAgents.push(child);
+    }
+    this.publish();
+  }
 
-  // --- Tick: advance agent state machines ---
-  const tick = useCallback(() => {
-    if (pausedRef.current) return;
-
+  private tick = () => {
+    if (!this.connected || this.paused) return;
     const now = Date.now();
-    const agentIds = Array.from(agentsRef.current.keys());
+    const agentIds = Array.from(this.agents.keys());
 
     for (const agentId of agentIds) {
-      const phase = agentPhaseRef.current.get(agentId);
+      const phase = this.phases.get(agentId);
       if (!phase) continue;
 
       // Random chance to advance state each tick
@@ -173,10 +220,10 @@ export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): Use
               priority: Math.floor(Math.random() * 5),
             },
           };
-          emit(taskEvent);
+          this.emit(taskEvent);
 
           // Occasionally spawn a sub-agent (20%)
-          if (roll < 0.06 && agentsRef.current.size < agentCount + 2) {
+          if (roll < 0.06 && this.agents.size < this.agentCount + 2) {
             const subId = `agent_sub_${uid()}`;
             const profile = randomFrom(AGENT_PROFILES);
             const subIdentity: AgentIdentity = {
@@ -186,22 +233,11 @@ export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): Use
               parentAgentId: agentId,
               createdAt: now,
             };
-            agentsRef.current.set(subId, subIdentity);
-            agentPhaseRef.current.set(subId, { phase: 'idle', taskId: null, callCount: 0, taskCount: 0 });
-            flowsRef.current.set(subId, emptyFlow(subIdentity));
+            this.agents.set(subId, subIdentity);
+            this.phases.set(subId, { phase: 'idle', taskId: null, callCount: 0, taskCount: 0 });
+            this.flows.set(subId, emptyFlow(subIdentity));
 
-            setAgents((prev) => {
-              const m = new Map(prev);
-              m.set(subId, subIdentity);
-              return m;
-            });
-            setFlows((prev) => {
-              const m = new Map(prev);
-              m.set(subId, emptyFlow(subIdentity));
-              return m;
-            });
-
-            emit({
+            this.emit({
               eventId: `evt_${uid()}`,
               type: 'subagent:spawn',
               timestamp: now,
@@ -225,9 +261,9 @@ export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): Use
           const callId = `call_${uid()}`;
           phase.callCount += 1;
 
-          toolCallTimestampsRef.current.push(now);
+          this.toolCallTimestamps.push(now);
 
-          emit({
+          this.emit({
             eventId: `evt_${uid()}`,
             type: 'tool:started',
             timestamp: now,
@@ -242,16 +278,17 @@ export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): Use
             },
           });
 
+          const callTaskId = phase.taskId;
           // Complete the tool call shortly after
-          setTimeout(() => {
-            if (pausedRef.current) return;
+          this.later(() => {
+            if (this.paused) return;
             const success = Math.random() > 0.1;
-            emit({
+            this.emit({
               eventId: `evt_${uid()}`,
               type: success ? 'tool:completed' : 'tool:failed',
               timestamp: Date.now(),
               agentId,
-              taskId: phase.taskId ?? undefined,
+              taskId: callTaskId,
               callId,
               payload: {
                 callId,
@@ -262,7 +299,7 @@ export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): Use
 
           // Occasionally emit reasoning
           if (roll < 0.1) {
-            emit({
+            this.emit({
               eventId: `evt_${uid()}`,
               type: 'reasoning:update',
               timestamp: now,
@@ -276,7 +313,7 @@ export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): Use
           const failed = Math.random() < 0.1;
           phase.taskCount += 1;
 
-          emit({
+          this.emit({
             eventId: `evt_${uid()}`,
             type: failed ? 'task:failed' : 'task:completed',
             timestamp: now,
@@ -293,113 +330,64 @@ export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): Use
       }
     }
 
-    // Update aggregate stats
-    const now2 = Date.now();
-    const windowStart = now2 - 60_000;
-    toolCallTimestampsRef.current = toolCallTimestampsRef.current.filter((t) => t > windowStart);
 
-    setFlows((currentFlows) => {
-      let activeTasks = 0;
-      let totalToolCalls = 0;
-      let totalCompleted = 0;
-      let totalFailed = 0;
+    this.publish();
+  };
 
-      for (const flow of currentFlows.values()) {
-        activeTasks += flow.tasks.filter((t) => t.status === 'in-progress' || t.status === 'queued').length;
-        totalToolCalls += flow.totalToolCalls;
-        totalCompleted += flow.totalTasksCompleted;
-        totalFailed += flow.tasks.filter((t) => t.status === 'failed').length;
-      }
-
-      setStats({
-        totalAgents: agentsRef.current.size,
-        activeTasks: agentPhaseRef.current.size > 0
-          ? Array.from(agentPhaseRef.current.values()).filter((p) => p.phase === 'in-task').length
-          : activeTasks,
-        totalToolCalls,
-        totalTasksCompleted: totalCompleted,
-        totalTasksFailed: totalFailed,
-        toolCallsPerMinute: toolCallTimestampsRef.current.length,
-      });
-
-      return currentFlows;
-    });
-  }, [emit, agentCount]);
-
-  // --- Connect: spawn initial agents ---
-  const connect = useCallback(() => {
+  connect = () => {
+    if (this.connected) return;
+    this.connected = true;
     const now = Date.now();
-    const count = Math.min(agentCount, AGENT_PROFILES.length);
-
-    const newAgents = new Map<string, AgentIdentity>();
-    const newFlows = new Map<string, AgentFlowTrace>();
-
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < this.agentCount; i++) {
       const profile = AGENT_PROFILES[i];
       const agentId = `agent_${i.toString().padStart(3, '0')}`;
-      const identity: AgentIdentity = {
-        agentId,
-        name: profile.name,
-        role: profile.role,
-        createdAt: now,
-      };
-      newAgents.set(agentId, identity);
-      newFlows.set(agentId, emptyFlow(identity));
-      agentsRef.current.set(agentId, identity);
-      flowsRef.current.set(agentId, emptyFlow(identity));
-      agentPhaseRef.current.set(agentId, { phase: 'idle', taskId: null, callCount: 0, taskCount: 0 });
-
-      // Emit spawn events
-      const spawnEvent: AgentEvent = {
-        eventId: `evt_spawn_${agentId}`,
-        type: 'agent:spawn',
-        timestamp: now + i * 100,
-        agentId,
-        payload: { name: profile.name, role: profile.role },
-      };
-      setTimeout(() => emit(spawnEvent), i * 200);
+      const identity: AgentIdentity = { agentId, name: profile.name, role: profile.role, createdAt: now };
+      this.agents.set(agentId, identity);
+      this.flows.set(agentId, emptyFlow(identity));
+      this.phases.set(agentId, { phase: 'idle', taskId: null, callCount: 0, taskCount: 0 });
+      this.later(() => this.emit({
+        eventId: `evt_spawn_${agentId}`, type: 'agent:spawn', timestamp: now + i * 100,
+        agentId, payload: { name: profile.name, role: profile.role },
+      }), i * 200);
     }
-
-    setAgents(newAgents);
-    setFlows(newFlows);
-    setConnected(true);
-  }, [agentCount, emit]);
-
-  const disconnect = useCallback(() => {
-    setConnected(false);
-    agentsRef.current.clear();
-    flowsRef.current.clear();
-    agentPhaseRef.current.clear();
-    setAgents(new Map());
-    setFlows(new Map());
-    setRecentEvents([]);
-  }, []);
-
-  // --- Tick interval ---
-  useEffect(() => {
-    if (!connected) return;
-    const intervalMs = 1000 / eventsPerSecond;
-    const id = setInterval(tick, intervalMs);
-    return () => clearInterval(id);
-  }, [connected, eventsPerSecond, tick]);
-
-  // --- Auto-start ---
-  useEffect(() => {
-    if (autoStart) connect();
-    return () => disconnect();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return {
-    connected,
-    executorState,
-    agents,
-    flows,
-    recentEvents,
-    stats,
-    connect,
-    disconnect,
-    paused,
-    setPaused,
+    this.interval = setInterval(this.tick, 1000 / this.eventsPerSecond);
+    this.publish();
   };
+
+  disconnect = () => {
+    if (this.interval) clearInterval(this.interval);
+    this.interval = null;
+    for (const timer of this.timers) clearTimeout(timer);
+    this.timers.clear();
+    this.deferred = [];
+    this.connected = false;
+    this.agents.clear();
+    this.flows.clear();
+    this.phases.clear();
+    this.toolCallTimestamps = [];
+    this.recentEvents = [];
+    this.totalFailed = 0;
+    this.publish();
+  };
+
+  setPaused = (paused: boolean) => {
+    this.paused = paused;
+    if (!paused && this.connected) {
+      const pending = this.deferred;
+      this.deferred = [];
+      for (const complete of pending) complete();
+    }
+    this.publish();
+  };
+}
+
+export function useAgentEventsMock(options: UseMockAgentEventsOptions = {}): UseAgentEventsReturn {
+  const { agentCount = 3, eventsPerSecond = 2, autoStart = true } = options;
+  const store = useMemo(() => new MockAgentStore(agentCount, eventsPerSecond), [agentCount, eventsPerSecond]);
+  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getServerSnapshot);
+  useEffect(() => {
+    if (autoStart) store.connect();
+    return store.disconnect;
+  }, [store, autoStart]);
+  return { ...snapshot, connect: store.connect, disconnect: store.disconnect, setPaused: store.setPaused };
 }

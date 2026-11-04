@@ -12,17 +12,14 @@
  */
 
 import type {
-  DataProvider,
-  DataProviderEvent,
-  DataProviderStats,
-  ConnectionState,
-  CategoryConfig,
-  SourceConfig,
-  RawEvent,
-  TopToken,
-  TraderEdge,
+DataProvider,
+DataProviderEvent,
+DataProviderStats,
+ConnectionState,
+CategoryConfig,
+SourceConfig,TopToken
 } from '@web3viz/core';
-import { registerProvider, getCategoriesForSource, SOURCE_CONFIG_MAP } from '@web3viz/core';
+import { registerProvider,getCategoriesForSource,SOURCE_CONFIG_MAP } from '@web3viz/core';
 
 import { BinanceTradeStream } from './binance-trades';
 import { BinanceLiquidationStream } from './binance-liquidations';

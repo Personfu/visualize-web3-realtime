@@ -1,3 +1,4 @@
+import { parsePumpMessage, type PumpMessage } from './message';
 import type {
   DataProvider,
   DataProviderEvent,
@@ -28,7 +29,7 @@ export interface PumpFunProviderOptions {
 const PUMPFUN_WS_URL = 'wss://pumpportal.fun/api/data';
 const DEFAULT_SOLANA_RPC_WS =
   process.env.NEXT_PUBLIC_SOLANA_WS_URL ||
-  'wss://atlas-mainnet.helius-rpc.com?api-key=1be79a41-8a57-4498-a35f-3b77c53db786';
+  'wss://api.mainnet.solana.com';
 
 const PUMP_PROGRAM_ID = '6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P';
 const PUMP_AMM_PROGRAM_ID = 'pAMMBay6oceH9fJKBRHGP5D4bD4sWpmSwMn52FMfXEA';
@@ -259,8 +260,8 @@ export class PumpFunProvider implements DataProvider {
       if (this._paused || !this._enabled) return;
 
       try {
-        const raw = JSON.parse(event.data);
-        if (!raw || typeof raw !== 'object') return;
+        const raw = parsePumpMessage(JSON.parse(event.data) as unknown);
+        if (!raw) return;
 
         // Token create event
         if (raw.txType === undefined && raw.mint && raw.name) {
@@ -304,7 +305,7 @@ export class PumpFunProvider implements DataProvider {
     this.tradesReconnectAttempts = 0;
   }
 
-  private handleTokenCreate(raw: any): void {
+  private handleTokenCreate(raw: PumpMessage): void {
     const tokenName = raw.name || 'Unknown';
     const tokenSymbol = raw.symbol || '???';
     const isAgent = isAgentLaunch(tokenName, tokenSymbol);
@@ -351,7 +352,8 @@ export class PumpFunProvider implements DataProvider {
     this.emitRaw(rawEvent);
   }
 
-  private handleTrade(raw: any): void {
+  private handleTrade(raw: PumpMessage): void {
+    if (!raw.txType) return;
     const tokenAddress = raw.mint as string;
     const cached = this.tokenCache.get(tokenAddress);
     const nativeAmount = raw.solAmount ? raw.solAmount / 1e9 : 0;

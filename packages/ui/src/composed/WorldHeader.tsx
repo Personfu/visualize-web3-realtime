@@ -1,8 +1,8 @@
 'use client';
 
-import React, { memo, type CSSProperties } from 'react';
-import { fontFamily, fontSize } from '../tokens/typography';
-import { borderRadius, shadows, transitions } from '../tokens/spacing';
+import React,{ memo,type CSSProperties } from 'react';
+import { fontFamily,fontSize } from '../tokens/typography';
+import { borderRadius } from '../tokens/spacing';
 
 // ============================================================================
 // ConnectionIndicator — shows connection status with a dot and label

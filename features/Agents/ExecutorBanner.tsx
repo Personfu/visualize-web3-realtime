@@ -1,8 +1,7 @@
 'use client';
 
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo,useEffect,useMemo,useState } from 'react';
 import type { ExecutorState } from '@web3viz/core';
-import { agentThemeTokens } from '@/packages/ui/src/tokens/agent-colors';
 
 interface ExecutorBannerProps {
   executorState: ExecutorState | null;
@@ -35,8 +34,7 @@ const HEALTH_COLORS: Record<Health, { bg: string; border: string; text: string }
 
 const RECONNECT_INTERVAL = 5; // seconds
 
-const ExecutorBanner = memo<ExecutorBannerProps>(({ executorState, connected, lastHeartbeat, sidebarWidth = 200, feedWidth = 260, colorScheme = 'dark' }) => {
-  const themeTokens = agentThemeTokens[colorScheme];
+const ExecutorBanner = memo<ExecutorBannerProps>(({ executorState, connected, lastHeartbeat, sidebarWidth = 200, feedWidth = 260 }) => {
   const [reconnectCountdown, setReconnectCountdown] = useState(RECONNECT_INTERVAL);
 
   const health = useMemo<Health>(() => {

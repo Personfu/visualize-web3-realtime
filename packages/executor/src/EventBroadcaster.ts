@@ -1,5 +1,8 @@
 import { WebSocketServer } from 'ws';
 import type { WebSocket } from 'ws';
+import { createServer, type IncomingMessage, type Server as HttpServer } from 'node:http';
+import type { Duplex } from 'node:stream';
+import { ExecutorAccess, executorProtocol } from './ExecutorAccess.js';
 import type { AgentEvent, AgentIdentity, AgentTask, ExecutorState } from './types.js';
 import type { BroadcastMessage } from './types.js';
 
@@ -10,26 +13,41 @@ interface ClientState {
 }
 
 export class EventBroadcaster {
-  private wss: WebSocketServer;
+  private wss?: WebSocketServer;
+  private standaloneServer?: HttpServer;
+  private httpServer?: HttpServer;
+  private upgrade?: (request: IncomingMessage, socket: Duplex, head: Buffer) => void;
   private clients = new Map<WebSocket, ClientState>();
   private recentEvents: AgentEvent[] = [];
 
-  constructor(private readonly port: number) {
-    // Will be initialized in start() with either a provided httpServer or a new one
-    this.wss = null as any;
-  }
+  constructor(private readonly port: number, private readonly access: ExecutorAccess) {}
 
   start(
     getSnapshot: () => { agents: AgentIdentity[]; tasks: AgentTask[]; recentEvents: AgentEvent[] },
-    httpServer?: any,
+    httpServer?: HttpServer,
   ): void {
-    // Create WebSocketServer on either provided httpServer or standalone on port
-    if (httpServer) {
-      this.wss = new WebSocketServer({ server: httpServer });
-    } else {
-      this.wss = new WebSocketServer({ port: this.port });
+    if (this.wss) throw new Error('Event broadcaster is already running');
+    const server = httpServer ?? createServer((_, response) => response.writeHead(404).end());
+    const wss = new WebSocketServer({
+      noServer: true,
+      maxPayload: 1024 * 1024,
+      handleProtocols: protocols => protocols.has(executorProtocol) ? executorProtocol : false,
+    });
+    this.wss = wss;
+    this.httpServer = server;
+    this.upgrade = (request, socket, head) => {
+      if (!this.access.authorizeWebSocket(request)) {
+        socket.end('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\nCache-Control: private, no-store\r\nContent-Length: 0\r\n\r\n', () => socket.destroy());
+        return;
+      }
+      wss.handleUpgrade(request, socket, head, client => wss.emit('connection', client));
+    };
+    server.on('upgrade', this.upgrade);
+    if (!httpServer) {
+      this.standaloneServer = server;
+      server.listen(this.port, '127.0.0.1');
     }
-    this.wss.on('connection', (ws: any) => {
+    wss.on('connection', (ws: WebSocket) => {
       const state: ClientState = { ws, subscribedAgents: null };
       this.clients.set(ws, state);
 
@@ -40,9 +58,11 @@ export class EventBroadcaster {
       // Handle client messages (e.g., subscribe)
       ws.on('message', (raw: Buffer | string) => {
         try {
-          const msg = JSON.parse(typeof raw === 'string' ? raw : raw.toString());
-          if (msg.type === 'subscribe' && Array.isArray(msg.agentIds)) {
-            state.subscribedAgents = new Set(msg.agentIds as string[]);
+          const msg: unknown = JSON.parse(typeof raw === 'string' ? raw : raw.toString());
+          if (!msg || typeof msg !== 'object' || !('type' in msg) || !('agentIds' in msg)) return;
+          if (msg.type === 'subscribe' && Array.isArray(msg.agentIds) && msg.agentIds.length <= 1000 &&
+              msg.agentIds.every(id => typeof id === 'string' && id.length <= 128)) {
+            state.subscribedAgents = new Set<string>(msg.agentIds);
           } else if (msg.type === 'subscribe' && msg.agentIds === null) {
             // Unsubscribe — receive all events again
             state.subscribedAgents = null;
@@ -88,9 +108,15 @@ export class EventBroadcaster {
 
   stop(): void {
     for (const [, client] of this.clients) {
-      client.ws.close();
+      client.ws.terminate();
     }
     this.clients.clear();
-    this.wss.close();
+    if (this.upgrade) this.httpServer?.off('upgrade', this.upgrade);
+    this.wss?.close();
+    this.standaloneServer?.close();
+    this.wss = undefined;
+    this.httpServer = undefined;
+    this.standaloneServer = undefined;
+    this.upgrade = undefined;
   }
 }

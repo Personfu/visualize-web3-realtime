@@ -3,7 +3,6 @@ const MOCK_CATEGORIES = ['filesystem', 'search', 'terminal', 'search', 'filesyst
 const DEFAULT_AGENT_ROLES = ['coder', 'researcher', 'planner'];
 let _callId = 0;
 function uid() { return `call_${Date.now()}_${++_callId}`; }
-function randomFrom(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 export class AgentManager {
     client;
     agents = new Map();

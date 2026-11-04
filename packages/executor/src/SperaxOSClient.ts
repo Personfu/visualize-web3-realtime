@@ -1,5 +1,6 @@
 import type { AgentIdentity, AgentTask, AgentEvent } from './types.js';
 import type { AgentSpawnConfig } from './types.js';
+import WebSocket from 'ws';
 
 /**
  * Client for the SperaxOS agent API.
@@ -14,6 +15,16 @@ export class SperaxOSClient {
     private readonly baseUrl: string,
     private readonly apiKey: string,
   ) {
+    try {
+      const url = new URL(baseUrl);
+      const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+      if (url.username || url.password || url.search || url.hash ||
+          (url.protocol !== 'https:' && !(url.protocol === 'http:' && loopback))) throw new Error();
+      this.baseUrl = url.href.replace(/\/$/, '');
+      if (apiKey.length > 4096 || /[\x00-\x20\x7f]/.test(apiKey)) throw new Error();
+    } catch {
+      throw new Error('Invalid upstream connection configuration');
+    }
     this.mockMode = !apiKey;
     if (this.mockMode) {
       console.log('[SperaxOSClient] No API key — operating in mock mode');
@@ -32,6 +43,7 @@ export class SperaxOSClient {
 
     const res = await fetch(`${this.baseUrl}/agents/v1/spawn`, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.apiKey}`,
@@ -46,8 +58,9 @@ export class SperaxOSClient {
   async executeTask(agentId: string, task: AgentTask): Promise<void> {
     if (this.mockMode) return;
 
-    const res = await fetch(`${this.baseUrl}/agents/v1/agents/${agentId}/tasks`, {
+    const res = await fetch(`${this.baseUrl}/agents/v1/agents/${encodeURIComponent(agentId)}/tasks`, {
       method: 'POST',
+      redirect: 'error',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${this.apiKey}`,
@@ -68,7 +81,8 @@ export class SperaxOSClient {
       };
     }
 
-    const res = await fetch(`${this.baseUrl}/agents/v1/agents/${agentId}`, {
+    const res = await fetch(`${this.baseUrl}/agents/v1/agents/${encodeURIComponent(agentId)}`, {
+      redirect: 'error',
       headers: { Authorization: `Bearer ${this.apiKey}` },
     });
 
@@ -82,18 +96,23 @@ export class SperaxOSClient {
       return () => {};
     }
 
-    const ws = new WebSocket(
-      `${this.baseUrl.replace(/^http/, 'ws')}/agents/v1/stream?agentId=${agentId}&apiKey=${this.apiKey}`,
-    );
+    const stream = new URL(`${this.baseUrl.replace(/^http/, 'ws')}/agents/v1/stream`);
+    stream.searchParams.set('agentId', agentId);
+    const ws = new WebSocket(stream, {
+      headers: { Authorization: `Bearer ${this.apiKey}` },
+      followRedirects: false,
+      maxPayload: 1024 * 1024,
+    });
 
-    ws.onmessage = (msg) => {
+    ws.on('message', (data) => {
       try {
-        const event = JSON.parse(msg.data as string) as AgentEvent;
+        const event = JSON.parse(data.toString()) as AgentEvent;
         callback(event);
       } catch {
         // ignore
       }
-    };
+    });
+    ws.on('error', () => {});
 
     return () => ws.close();
   }
@@ -102,6 +121,7 @@ export class SperaxOSClient {
     if (this.mockMode) return true;
     try {
       const res = await fetch(`${this.baseUrl}/health`, {
+        redirect: 'error',
         headers: { Authorization: `Bearer ${this.apiKey}` },
         signal: AbortSignal.timeout(5000),
       });

@@ -6,8 +6,8 @@
  */
 'use client';
 
-import { memo, useMemo } from 'react';
-import type { AgentTask, AgentToolCall, AgentIdentity, AgentEvent } from '@web3viz/core';
+import { memo, useEffect, useMemo, useState } from 'react';
+import type { AgentTask,AgentToolCall,AgentIdentity,AgentEvent } from '@web3viz/core';
 import { AgentStatusIndicator } from './AgentStatusIndicator';
 import { TASK_STATUS_COLORS } from './constants';
 
@@ -25,19 +25,6 @@ function formatDuration(ms: number): string {
   const mins = Math.floor(secs / 60);
   if (mins > 0) return `${mins}m ${secs % 60}s`;
   return `${secs}s`;
-}
-
-function getStatusIcon(status: string): string {
-  switch (status) {
-    case 'completed':
-      return '✓';
-    case 'failed':
-      return '✗';
-    case 'in-progress':
-      return '⏳';
-    default:
-      return '●';
-  }
 }
 
 function getToolStatusColor(status: string): string {
@@ -68,27 +55,24 @@ function getLatestReasoning(events: AgentEvent[]): string | null {
 
 export const TaskInspectorPanel = memo<TaskInspectorPanelProps>(
   ({ task, agent, toolCalls, subAgents, recentEvents, onClose }) => {
-    if (!task || !agent) return null;
-
-    const statusColor = TASK_STATUS_COLORS[task.status] || '#999999';
-    const statusIcon = getStatusIcon(task.status);
-
+    const startedAt = task?.startedAt;
+    const endedAt = task?.endedAt;
+    const taskId = task?.taskId;
+    const [now, setNow] = useState<number | null>(null);
+    useEffect(() => {
+      if (!startedAt || endedAt) return;
+      const timer = setInterval(() => setNow(Date.now()), 1000);
+      return () => clearInterval(timer);
+    }, [startedAt, endedAt]);
     const duration = useMemo(() => {
-      if (task.startedAt && task.endedAt) {
-        return formatDuration(task.endedAt - task.startedAt);
-      }
-      if (task.startedAt) {
-        return formatDuration(Date.now() - task.startedAt) + ' (running)';
-      }
+      if (startedAt && endedAt) return formatDuration(endedAt - startedAt);
+      if (startedAt) return formatDuration(Math.max(0, (now ?? startedAt) - startedAt)) + ' (running)';
       return '—';
-    }, [task.startedAt, task.endedAt]);
-
+    }, [startedAt, endedAt, now]);
     const reasoning = useMemo(() => getLatestReasoning(recentEvents), [recentEvents]);
-
-    // Filter tool calls for this task
-    const taskToolCalls = useMemo(() => {
-      return toolCalls.filter((tc) => tc.taskId === task.taskId);
-    }, [toolCalls, task.taskId]);
+    const taskToolCalls = useMemo(() => taskId ? toolCalls.filter(tc => tc.taskId === taskId) : [], [toolCalls, taskId]);
+    if (!task || !agent) return null;
+    const statusColor = TASK_STATUS_COLORS[task.status] || '#999999';
 
     return (
       <>

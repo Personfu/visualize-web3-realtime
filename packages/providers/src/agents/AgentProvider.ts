@@ -1,16 +1,16 @@
 import type {
-  DataProvider,
-  DataProviderEvent,
-  DataProviderStats,
-  ConnectionState,
-  CategoryConfig,
-  SourceConfig,
-  RawEvent,
+DataProvider,
+DataProviderEvent,
+DataProviderStats,
+ConnectionState,
+CategoryConfig,
+SourceConfig,
+RawEvent,
 } from '@web3viz/core';
-import { getAllProviders, getCategoriesForSource, SOURCE_CONFIG_MAP } from '@web3viz/core';
+import { getAllProviders,getCategoriesForSource,SOURCE_CONFIG_MAP } from '@web3viz/core';
 
 import { AGENT_CATEGORIES } from './categories';
-import { isAgentEvent, registerAgentAddress } from './detection';
+import { isAgentEvent,registerAgentAddress } from './detection';
 import { AgentTracker } from './tracker';
 
 // ============================================================================
@@ -31,7 +31,6 @@ export interface AgentProviderOptions {
   subscribeDelayMs?: number;
 }
 
-let idCounter = 0;
 
 export class AgentProvider implements DataProvider {
   readonly id = 'agents';
@@ -241,14 +240,13 @@ export class AgentProvider implements DataProvider {
   }
 
   private rebuildGraphData(): void {
-    const AGENT_PALETTE = ['#c084fc', '#60a5fa', '#f472b6', '#34d399', '#fbbf24', '#fb923c', '#a78bfa', '#22d3ee'];
 
     // Build topTokens from known agents (top 8 by interaction count)
     const sorted = Array.from(this.knownAgents.entries())
       .sort((a, b) => b[1].interactions - a[1].interactions)
       .slice(0, 8);
 
-    this.stats.topTokens = sorted.map(([address, data], idx) => ({
+    this.stats.topTokens = sorted.map(([address, data]) => ({
       tokenAddress: address,
       mint: address,
       symbol: data.name,

@@ -1,8 +1,8 @@
 'use client';
 
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
-import { AnimatePresence, m } from 'framer-motion';
-import type { DataProvider, ConnectionState, SourceConfig } from '@web3viz/core';
+import { memo,useCallback,useEffect,useMemo,useRef } from 'react';
+import { AnimatePresence,m } from 'framer-motion';
+import type { DataProvider,ConnectionState } from '@web3viz/core';
 
 // ============================================================================
 // Types

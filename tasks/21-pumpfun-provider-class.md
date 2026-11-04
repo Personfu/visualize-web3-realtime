@@ -56,7 +56,7 @@ interface PumpFunProviderOptions {
    - Maintain: `tokenCache` (Map<mint, {name, symbol}>), `tokenAcc` (Map<mint, TopToken>), `traderAcc` (Map<key, TraderEdge>)
    - Auto-reconnect on close after 3s
 
-2. **Claims WebSocket** — Solana RPC (configurable URL, default: `wss://atlas-mainnet.helius-rpc.com?api-key=1be79a41-8a57-4498-a35f-3b77c53db786`)
+2. **Claims WebSocket** — Solana RPC (configurable URL, default: `wss://api.mainnet.solana.com`)
    - On open: send `logsSubscribe` for PumpFun program `6EF8rrecthR5Dkzon8Nwu78hRvfCKubJ14M5uBEwF6P`
    - Parse claim instructions from `Program data:` logs (decode base64 → hex discriminator):
      - Wallet claims: discriminators `7a027f010ebf0caf`, `a537817004b3ca28`, `e2d6f62107f293e5`, `e8f5c2eeeada3a59`

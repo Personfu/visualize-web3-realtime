@@ -1,5 +1,8 @@
 'use client';
 
+import { executorProtocols, validateViewerUrl } from '@web3viz/core/transport';
+
+
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   AgentEvent,
@@ -115,7 +118,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   const pausedRef = useRef(paused);
   const toolCallTimestampsRef = useRef<number[]>([]);
 
-  pausedRef.current = paused;
+  useEffect(() => { pausedRef.current = paused; }, [paused]);
 
   // --- Heartbeat timeout ---
   const resetHeartbeatTimer = useCallback(() => {
@@ -406,20 +409,28 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
   }, [flows, agents]);
 
   // --- WebSocket connection ---
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+  const connect = useCallback(function connectSocket() {
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING)) return;
 
-    const wsUrl = apiKey ? `${url}?apiKey=${encodeURIComponent(apiKey)}` : url;
-    const ws = new WebSocket(wsUrl);
+    let protocols: string[];
+    try {
+      validateViewerUrl(url);
+      protocols = executorProtocols(apiKey);
+    } catch {
+      return;
+    }
+    const ws = new WebSocket(url, protocols);
     wsRef.current = ws;
 
     ws.onopen = () => {
+      if (wsRef.current !== ws) { ws.close(); return; }
       setConnected(true);
       reconnectAttemptsRef.current = 0;
       resetHeartbeatTimer();
     };
 
     ws.onmessage = (msg) => {
+      if (wsRef.current !== ws) return;
       try {
         const event = JSON.parse(msg.data as string) as AgentEvent;
         if (event.eventId && event.type && event.timestamp) {
@@ -431,6 +442,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     };
 
     ws.onclose = () => {
+      if (wsRef.current !== ws) return;
       setConnected(false);
       wsRef.current = null;
 
@@ -439,7 +451,7 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
         const delay = reconnectDelay * Math.pow(2, reconnectAttemptsRef.current);
         reconnectAttemptsRef.current += 1;
         reconnectTimerRef.current = setTimeout(() => {
-          connect();
+          connectSocket();
         }, delay);
       }
     };
@@ -460,8 +472,9 @@ export function useAgentEvents(options: UseAgentEventsOptions): UseAgentEventsRe
     }
     reconnectAttemptsRef.current = maxReconnectAttempts; // prevent auto-reconnect
     if (wsRef.current) {
-      wsRef.current.close();
+      const socket = wsRef.current;
       wsRef.current = null;
+      socket.close();
     }
     setConnected(false);
   }, [maxReconnectAttempts]);

@@ -10,7 +10,7 @@ import { agentThemeTokens } from '@/packages/ui/src/tokens/agent-colors';
 function useAnimatedValue(target: number, duration = 400): number {
   const [display, setDisplay] = useState(target);
   const prevRef = useRef(target);
-  const rafRef = useRef<number>();
+  const rafRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const from = prevRef.current;

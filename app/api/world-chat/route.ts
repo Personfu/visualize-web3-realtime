@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { ChatRequestError, readChatRequest } from '@/features/World/ai/chatRequest';
 import { getToolDefinitions } from '@/features/World/ai/componentRegistry';
 
 // ---------------------------------------------------------------------------
 // Anthropic client — reads ANTHROPIC_API_KEY from env at request time
 // ---------------------------------------------------------------------------
 
-function getClient(): Anthropic {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY is not set');
-  }
-  return new Anthropic({ apiKey });
-}
+const privateHeaders = { 'Cache-Control': 'private, no-store', 'X-Content-Type-Options': 'nosniff' };
 
 // ---------------------------------------------------------------------------
 // Tool definitions from the component registry
@@ -28,34 +23,18 @@ const tools: Anthropic.Messages.Tool[] = getToolDefinitions().map((t) => ({
 // Route handler
 // ---------------------------------------------------------------------------
 
-interface ChatContext {
-  stats: {
-    totalEvents: number;
-    totalVolume: number;
-    connections: number;
-  };
-  hubCount: number;
-}
-
-interface IncomingMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
 export async function POST(request: NextRequest) {
-  let body: { messages: IncomingMessage[]; context: ChatContext };
-
+  let body: Awaited<ReturnType<typeof readChatRequest>>;
   try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 });
+    body = await readChatRequest(request);
+  } catch (error) {
+    return NextResponse.json({ error: 'Invalid chat request' }, {
+      status: error instanceof ChatRequestError ? error.status : 400, headers: privateHeaders,
+    });
   }
-
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return NextResponse.json({ error: 'AI service unavailable' }, { status: 503, headers: privateHeaders });
   const { messages, context } = body;
-
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    return NextResponse.json({ error: 'Messages array is required' }, { status: 400 });
-  }
 
   // Build system prompt with live context
   const systemPrompt = `You are the AI agent controlling a 3D visualization of Web3 activity.
@@ -75,7 +54,7 @@ When answering questions about the data, reference the stats you have.
 Always respond with a brief text message in addition to any tool calls.`;
 
   try {
-    const client = getClient();
+    const client = new Anthropic({ apiKey });
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
@@ -109,18 +88,9 @@ Always respond with a brief text message in addition to any tool calls.`;
       textMessage = `Applied: ${actionNames}`;
     }
 
-    return NextResponse.json({ message: textMessage, actions });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-
-    // Don't leak API key details
-    if (message.includes('ANTHROPIC_API_KEY')) {
-      return NextResponse.json(
-        { error: 'AI service not configured. Set ANTHROPIC_API_KEY in environment.' },
-        { status: 503 },
-      );
-    }
-
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ message: textMessage, actions }, { headers: privateHeaders });
+  } catch {
+    // SDK exceptions may contain upstream details. Never return or log their text.
+    return NextResponse.json({ error: 'AI service unavailable' }, { status: 500, headers: privateHeaders });
   }
 }

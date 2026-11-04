@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import dynamicImport from 'next/dynamic';
 import { useSearchParams } from 'next/navigation';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentTask, AgentIdentity } from '@web3viz/core';
+import { Suspense,useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import type { AgentTask, AgentEvent } from '@web3viz/core';
 import type { AgentForceGraphHandle } from '@/features/Agents/AgentForceGraph';
 import { useAgentProvider } from '@/hooks/useAgentProvider';
 import { useAgentKeyboardShortcuts } from '@/hooks/useAgentKeyboardShortcuts';
@@ -19,7 +19,7 @@ import { agentThemeTokens } from '@/packages/ui/src/tokens/agent-colors';
 import { timestampedFilename } from '@/features/World/utils/screenshot';
 
 // Lazy-load the 3D force graph (Three.js not SSR-safe)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const AgentForceGraph = dynamicImport(() => import('@/features/Agents/AgentForceGraph'), {
   ssr: false,
   loading: () => (
@@ -40,7 +40,7 @@ const AgentForceGraph = dynamicImport(() => import('@/features/Agents/AgentForce
       Connecting to agent executor...
     </div>
   ),
-}) as any;
+});
 
 // ---------------------------------------------------------------------------
 // Tool categories
@@ -55,7 +55,8 @@ const ALL_TOOL_CATEGORIES = new Set(['filesystem', 'search', 'terminal', 'networ
 function AgentsPageInner() {
   const searchParams = useSearchParams();
   const agentGraphRef = useRef<AgentForceGraphHandle>(null);
-  const [activeAgentId, setActiveAgentId] = useState<string | null>(null);
+  const queryAgentId = searchParams.get('agentId');
+  const [selection, setSelection] = useState<{ query: string | null; id: string | null } | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [pageReady, setPageReady] = useState(false);
   const [activeToolCategories, setActiveToolCategories] = useState<Set<string>>(ALL_TOOL_CATEGORIES);
@@ -67,23 +68,20 @@ function AgentsPageInner() {
   const [windowWidth, setWindowWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1440
   );
-  const [downloading, setDownloading] = useState<boolean>(false);
+  const downloading = false;
   const [demoActive, setDemoActive] = useState(false);
 
-  const { stats, agents, flows, executorState, agentStats, connected, events } = useAgentProvider({
+  const { stats, agents, flows, executorState, agentStats, connected } = useAgentProvider({
     mock: process.env.NEXT_PUBLIC_AGENT_MOCK !== 'false',
     url: process.env.NEXT_PUBLIC_SPERAXOS_WS_URL,
-    apiKey: process.env.NEXT_PUBLIC_SPERAXOS_API_KEY,
     enabled: demoActive,
   });
 
+  const activeAgentId = selection?.query === queryAgentId
+    ? selection.id : queryAgentId && agents.has(queryAgentId) ? queryAgentId : null;
   const handleSelectAgent = useCallback((agentId: string | null) => {
-    setActiveAgentId(agentId);
-  }, []);
-
-  const handleSelectTask = useCallback((taskId: string | null) => {
-    setSelectedTaskId(taskId);
-  }, []);
+    setSelection({ query: queryAgentId, id: agentId });
+  }, [queryAgentId, setSelection]);
 
   const handleToggleToolCategory = useCallback((category: string) => {
     setActiveToolCategories((prev) => {
@@ -95,22 +93,22 @@ function AgentsPageInner() {
       }
       return next;
     });
-  }, []);
+  }, [setActiveToolCategories]);
 
-  const handleTogglePlay = useCallback(() => setIsPlaying((p) => !p), []);
+  const handleTogglePlay = useCallback(() => setIsPlaying((p) => !p), [setIsPlaying]);
   const handleFitCamera = useCallback(() => {
     // Camera fit is handled by AgentForceGraph internally
   }, []);
-  const handleToggleFeed = useCallback(() => setFeedVisible((v) => !v), []);
+  const handleToggleFeed = useCallback(() => setFeedVisible((v) => !v), [setFeedVisible]);
 
   // Step timeline by 5 seconds per arrow press
   const STEP_MS = 5000;
   const handleStepBackward = useCallback(() => {
     setScrubOffset((prev) => prev + STEP_MS);
-  }, []);
+  }, [setScrubOffset]);
   const handleStepForward = useCallback(() => {
     setScrubOffset((prev) => Math.max(0, prev - STEP_MS));
-  }, []);
+  }, [setScrubOffset]);
 
   const handleDownloadAgent = useCallback(() => {
     if (!agentGraphRef.current || downloading) return;
@@ -122,10 +120,8 @@ function AgentsPageInner() {
     link.click();
   }, [downloading]);
 
-  // Mark page ready once first agent data arrives
-  useEffect(() => {
-    if (!pageReady && agents.size > 0) setPageReady(true);
-  }, [agents.size, pageReady]);
+  // Preserve readiness once data has arrived, without an effect/render cascade.
+  if (!pageReady && agents.size > 0) setPageReady(true);
 
   // Track window width for responsive layout
   useEffect(() => {
@@ -134,29 +130,17 @@ function AgentsPageInner() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Deep link support: ?agentId=X
-  useEffect(() => {
-    const agentId = searchParams.get('agentId');
-    if (agentId && agents.has(agentId)) {
-      setActiveAgentId(agentId);
-    }
-  }, [searchParams, agents]);
-
   // Event batching: collect events over 100ms window to prevent UI jank
-  const pendingEventsRef = useRef<any[]>([]);
-  const [batchedEvents, setBatchedEvents] = useState<any[]>([]);
+  const [batchedEvents, setBatchedEvents] = useState<AgentEvent[]>([]);
 
   useEffect(() => {
     const allEvents = stats.rawEvents
       .filter((e) => e.type === 'agentEvent')
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .map((e) => (e as any).data)
+      .map((e) => e.data)
       .slice(0, 500);
 
-    pendingEventsRef.current = allEvents;
-
     const timer = setTimeout(() => {
-      setBatchedEvents(pendingEventsRef.current);
+      setBatchedEvents(allEvents);
     }, 100);
 
     return () => clearTimeout(timer);
@@ -233,7 +217,6 @@ function AgentsPageInner() {
   // Responsive layout breakpoints
   const isMobile = windowWidth < 768;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
-  const isDesktop = windowWidth >= 1024;
 
   // Calculate layout dimensions based on breakpoint
   const sidebarWidth = isMobile ? 0 : isTablet ? 48 : 200;
