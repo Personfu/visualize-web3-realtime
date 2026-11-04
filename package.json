@@ -11,11 +11,14 @@
     "dev": "next dev -p 3100",
     "dev:playground": "turbo run dev --filter=@web3viz/playground",
     "dev:executor": "turbo run dev --filter=@web3viz/executor",
-    "build": "next build",
-    "build:web": "next build",
+    "build": "next build --webpack",
+    "build:web": "next build --webpack",
     "start": "next start -p 3100",
-    "lint": "next lint",
-    "typecheck": "turbo run typecheck"
+    "lint": "eslint . --max-warnings=0",
+    "typecheck": "npm run typecheck:web && npm run typecheck:executor && turbo run typecheck",
+    "typecheck:web": "tsc --noEmit",
+    "test:offline": "tsx --test tests/mock-provider.test.ts",
+    "typecheck:executor": "tsc --noEmit --project packages/executor/tsconfig.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
@@ -25,7 +28,7 @@
     "d3-force": "^3.0.0",
     "framer-motion": "^11.0.0",
     "html2canvas": "^1.4.1",
-    "next": "^16.4.4",
+    "next": "16.4.5",
     "postprocessing": "^6.39.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
@@ -39,9 +42,15 @@
     "@types/react-dom": "^18.3.0",
     "@types/three": "^0.169.0",
     "autoprefixer": "^10.4.0",
+    "eslint": "9.39.5",
+    "eslint-config-next": "16.4.5",
     "postcss": "^8.4.0",
     "tailwindcss": "^3.4.0",
     "turbo": "^2.0.0",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "tsx": "4.21.0"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }

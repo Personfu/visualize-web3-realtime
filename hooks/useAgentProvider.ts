@@ -149,7 +149,6 @@ function agentEventsToProviderEvents(
 
     return {
       id: evt.eventId,
-      source: 'agents',
       providerId: 'agents',
       category,
       chain: 'agents',
@@ -195,11 +194,11 @@ export function useAgentProvider(options: UseAgentProviderOptions = {}): UseAgen
     [data.recentEvents, data.agents, enabled],
   );
 
-  const stats = useMemo<DataProviderStats>(() => {
+  const stats = useMemo<DataProviderStats>((): DataProviderStats => {
     if (!enabled) {
       return {
         counts: {},
-        totalVolumeSol: 0,
+        totalVolume: {},
         totalTransactions: 0,
         totalAgents: 0,
         recentEvents: [],
@@ -219,7 +218,7 @@ export function useAgentProvider(options: UseAgentProviderOptions = {}): UseAgen
 
     return {
       counts,
-      totalVolumeSol: data.stats.totalTasksCompleted,
+      totalVolume: { agents: data.stats.totalTasksCompleted },
       totalTransactions: data.stats.totalToolCalls,
       totalAgents: data.stats.totalAgents,
       recentEvents: providerEvents,

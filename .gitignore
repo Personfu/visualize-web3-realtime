@@ -9,3 +9,6 @@ packages/*/data/
 *.db
 *.db-wal
 *.db-shm
+
+# Machine-specific compiler cache; never publish local paths or build logs.
+*.tsbuildinfo

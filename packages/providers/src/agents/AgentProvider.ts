@@ -250,11 +250,13 @@ export class AgentProvider implements DataProvider {
 
     this.stats.topTokens = sorted.map(([address, data], idx) => ({
       tokenAddress: address,
+      mint: address,
       symbol: data.name,
       name: data.name,
       chain: 'agents',
       trades: data.interactions,
       volume: data.interactions,
+      volumeSol: data.interactions,
       nativeSymbol: 'TASKS',
     }));
 
@@ -265,9 +267,11 @@ export class AgentProvider implements DataProvider {
       .map((e) => ({
         trader: e.trader,
         tokenAddress: e.agentAddress,
+        mint: e.agentAddress,
         chain: 'agents',
         trades: e.count,
         volume: e.count,
+        volumeSol: e.count,
       }));
   }
 }
